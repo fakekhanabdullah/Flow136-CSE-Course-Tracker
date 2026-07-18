@@ -1034,7 +1034,7 @@ export default function Home() {
       }
     });
 
-    // 3. CSE Major Electives: Target = 9 Credits
+    // 3. CSE Major Electives: Target = 6 Credits
     let electiveCompleted = 0;
     COURSES.forEach(c => {
       if (c.category === "CSE Major Elective" && completedCodes.has(c.code)) {
@@ -1178,7 +1178,7 @@ export default function Home() {
       schoolCoreCompleted,
       schoolCoreTotal: 12,
       electiveCompleted,
-      electiveTotal: 9,
+      electiveTotal: 6,
       stream1Completed,
       stream1Total: 6,
       stream2Completed,
