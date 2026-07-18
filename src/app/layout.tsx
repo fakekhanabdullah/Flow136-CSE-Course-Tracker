@@ -13,12 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BRACU CSE Course Tracker & Planner",
-  description: "An interactive, client-side course tracking and CGPA planning application engineered specifically for Computer Science and Engineering (CSE) students at BRAC University.",
+  title: "Flow136 | BRACU CSE Curriculum & CGPA Planner",
+  description: "Your curriculum, minus the complexity. Map out your 136-credit BRACU CSE degree cleanly and offline with Flow136.",
   openGraph: {
-    title: "BRACU CSE Course Tracker & Planner",
-    description: "An interactive, client-side course tracking and CGPA planning application engineered specifically for Computer Science and Engineering (CSE) students at BRAC University.",
+    title: "Flow136",
+    description: "Your curriculum, minus the complexity. Map out your 136-credit BRACU CSE degree cleanly and offline with Flow136.",
     type: "website",
+    siteName: "Flow136",
   },
 };
 

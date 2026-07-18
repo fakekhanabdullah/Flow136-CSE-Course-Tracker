@@ -23,7 +23,8 @@ import {
   HelpCircle,
   Lock,
   Target,
-  TrendingUp
+  TrendingUp,
+  FileText
 } from "lucide-react";
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
 
@@ -173,6 +174,7 @@ export default function Home() {
   const [targetCgpa, setTargetCgpa] = useState<string>("3.50");
   const [roiExpanded, setRoiExpanded] = useState<boolean>(false);
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
+  const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
 
   // Hydration fix & LocalStorage Loader
   useEffect(() => {
@@ -521,7 +523,7 @@ export default function Home() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(stateExport, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "BRACU_CSE_Course_Tracker_Backup.json");
+    downloadAnchor.setAttribute("download", "Flow136_Backup.json");
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -1667,7 +1669,7 @@ export default function Home() {
       <div className="flex min-h-screen items-center justify-center bg-[#08080a] text-zinc-100 font-sans">
         <div className="flex flex-col items-center gap-4 text-center">
           <GraduationCap className="h-16 w-16 text-indigo-500 animate-pulse" />
-          <h1 className="text-xl font-bold tracking-tight">Loading BRACU Course Tracker...</h1>
+          <h1 className="text-xl font-bold tracking-tight">Loading Flow136...</h1>
           <p className="text-zinc-500 text-sm">Organizing your degree curriculum...</p>
         </div>
       </div>
@@ -1686,7 +1688,7 @@ export default function Home() {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-              BRACU CSE Course Tracker
+              Flow136
             </h1>
             <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
           </div>
@@ -2926,7 +2928,7 @@ export default function Home() {
                 <GraduationCap className="h-6 w-6" />
               </div>
               <h2 className="text-2xl font-black tracking-tight text-white">
-                Welcome to BRACU CSE Course Tracker
+                Welcome to Flow136 
               </h2>
               <p className="text-xs text-zinc-400 font-medium italic">
                 "Your curriculum, minus the complexity."
@@ -3000,7 +3002,7 @@ export default function Home() {
 
         {/* Muted Copyright Disclaimer */}
         <div className="text-[10px] text-zinc-550 leading-relaxed font-medium">
-          <p>© 2026 BRACU CSE Course Tracker. Made by: Khan Abdullah</p>
+          <p>© 2026 Flow136. Made by: Khan Abdullah</p>
         </div>
       </footer>
     </div>
