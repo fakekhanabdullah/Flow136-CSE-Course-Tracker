@@ -27,14 +27,14 @@ export const COURSES: Course[] = [
   { code: "STA101", title: "Introduction to Statistics", credits: 3, category: "GenEd Stream 2", mandatory: false },
   { code: "GSC110", title: "Space, Time & Infinity", credits: 3, category: "GenEd Stream 2", mandatory: false },
 
-  // Math & Science Core
-  { code: "MAT110", title: "MATH I: Differential Calculus and Co-ordinate Geometry", credits: 3, category: "Math & Science Core", mandatory: true },
-  { code: "MAT120", title: "MATH II: Integral Calculus and Differential Equations", credits: 3, category: "Math & Science Core", mandatory: true },
-  { code: "MAT215", title: "MATH III: Complex Variables and Laplace Transformations", credits: 3, category: "Math & Science Core", mandatory: true },
-  { code: "MAT216", title: "MATH IV: Linear Algebra and Fourier Analysis", credits: 3, category: "Math & Science Core", mandatory: true },
-  { code: "PHY111", title: "Principles of Physics I", credits: 3, category: "Math & Science Core", mandatory: true },
-  { code: "PHY112", title: "Principles of Physics II", credits: 3, category: "Math & Science Core", mandatory: true },
-  { code: "STA201", title: "Elements of Statistics and Probabilities", credits: 3, category: "Math & Science Core", mandatory: true },
+  // School Core & GenEd Stream 2 Math/Science Courses
+  { code: "MAT110", title: "MATH I: Differential Calculus and Co-ordinate Geometry", credits: 3, category: "GenEd Stream 2", mandatory: true },
+  { code: "MAT120", title: "MATH II: Integral Calculus and Differential Equations", credits: 3, category: "School Core (Math & Sciences)", mandatory: true },
+  { code: "MAT215", title: "MATH III: Complex Variables and Laplace Transformations", credits: 3, category: "School Core (Math & Sciences)", mandatory: true },
+  { code: "MAT216", title: "MATH IV: Linear Algebra and Fourier Analysis", credits: 3, category: "School Core (Math & Sciences)", mandatory: true },
+  { code: "PHY111", title: "Principles of Physics I", credits: 3, category: "GenEd Stream 2", mandatory: true },
+  { code: "PHY112", title: "Principles of Physics II", credits: 3, category: "School Core (Math & Sciences)", mandatory: true },
+  { code: "STA201", title: "Elements of Statistics and Probabilities", credits: 3, category: "GenEd Stream 2", mandatory: true },
 
   // GenEd Stream 3
   { code: "BNG103", title: "Bangla Language and Literature", credits: 3, category: "GenEd Stream 3", mandatory: true },
