@@ -546,10 +546,20 @@ export default function Home() {
 
       toBlob(node, {
         cacheBust: false,
-        skipFonts: true, // Prevents network hanging
-        pixelRatio: 1.5, // Crisp retina text without massive file sizes
-        backgroundColor: '#030712', // Strict hex fallback for Tailwind v4
-      }).then((blob) => {
+        skipFonts: false,
+        pixelRatio: 1.5,
+        backgroundColor: '#030712',
+        width: 750,
+        height: node.scrollHeight,
+        windowWidth: 1200,
+        windowHeight: node.scrollHeight + 100,
+        style: {
+          width: '750px',
+          height: `${node.scrollHeight}px`,
+          maxHeight: 'none',
+          overflow: 'visible'
+        }
+      } as any).then((blob) => {
         if (!blob) {
           throw new Error("Blob generation failed");
         }
@@ -3096,7 +3106,7 @@ export default function Home() {
             </div>
 
             {/* Scrollable Printable Grade Sheet Container */}
-            <div className="overflow-y-auto custom-scrollbar pt-4 pr-1 space-y-6">
+            <div className="overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 space-y-6">
               {/* Visible Grade Sheet Node Target */}
               <div 
                 id="flow136-grade-sheet-export-node"
@@ -3104,7 +3114,7 @@ export default function Home() {
                   backgroundColor: '#030712',
                   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                 }}
-                className="w-full h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-2xl p-6 shadow-2xl text-white relative overflow-hidden font-sans"
+                className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-2xl p-6 shadow-2xl text-white relative overflow-visible font-sans mx-auto"
               >
                 {/* Watermark Background (Z-Index 0) */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
