@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { toBlob } from "html-to-image";
 import { 
   AlertTriangle, 
   Plus, 
@@ -175,6 +176,7 @@ export default function Home() {
   const [roiExpanded, setRoiExpanded] = useState<boolean>(false);
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
   const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
+  const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
 
   // Hydration fix & LocalStorage Loader
   useEffect(() => {
@@ -527,6 +529,51 @@ export default function Home() {
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  // Generate & Download Academic Progress Snapshot PNG Image
+  const handleGenerateGradeSheet = async () => {
+    setIsGeneratingSnapshot(true);
+    try {
+      const node = document.getElementById("flow136-grade-sheet-export-node");
+      if (!node) {
+        setIsGeneratingSnapshot(false);
+        return;
+      }
+
+      // Micro-delay to let DOM state settle
+      await new Promise(res => setTimeout(res, 30));
+
+      toBlob(node, {
+        cacheBust: false,
+        skipFonts: true, // Prevents network hanging
+        pixelRatio: 1.5, // Crisp retina text without massive file sizes
+        backgroundColor: '#030712', // Strict hex fallback for Tailwind v4
+      }).then((blob) => {
+        if (!blob) {
+          throw new Error("Blob generation failed");
+        }
+        // Programmatic fast-download
+        const url = URL.createObjectURL(blob);
+        const filename = `Flow136_Progress_${cumulativeStats.completedCredits}cr.png`;
+        const downloadLink = document.createElement("a");
+        downloadLink.href = url;
+        downloadLink.download = filename;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        downloadLink.remove();
+        // Cleanup memory
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setIsGeneratingSnapshot(false);
+      }).catch((err) => {
+        console.error('Image export failed:', err);
+        setIsGeneratingSnapshot(false);
+      });
+
+    } catch (err) {
+      console.error("Failed to generate grade sheet snapshot image:", err);
+      setIsGeneratingSnapshot(false);
+    }
   };
 
   // Import JSON Backup
@@ -1741,6 +1788,15 @@ export default function Home() {
                 className="hidden"
               />
             </label>
+
+            <button
+              onClick={() => setShowGradeSheetModal(true)}
+              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-indigo-500/30 text-slate-200 hover:text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
+              title="Open official progress grade sheet preview modal"
+            >
+              <FileText className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Snapshot Progress</span>
+            </button>
  
             <button
               onClick={() => setShowResetConfirm(true)}
@@ -2217,11 +2273,11 @@ export default function Home() {
                       </div>
                       <div className="pt-0.5">
                         {cumulativeStats.cgpa >= 2.0 ? (
-                          <span className="text-[10px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-450 px-3 py-1 rounded-full uppercase tracking-wider">
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[10px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-450 px-3 py-1 rounded-full uppercase tracking-wider">
                             Good Standing
                           </span>
                         ) : (
-                          <span className="text-[10px] font-extrabold bg-rose-500/10 border border-rose-500/20 text-rose-450 px-3 py-1 rounded-full uppercase tracking-wider">
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[10px] font-extrabold bg-rose-500/10 border border-rose-500/20 text-rose-450 px-3 py-1 rounded-full uppercase tracking-wider">
                             Probation Range
                           </span>
                         )}
@@ -3005,6 +3061,241 @@ export default function Home() {
           <p>© 2026 Flow136. Made by: Khan Abdullah</p>
         </div>
       </footer>
+
+      {/* 5. Grade Sheet Preview Modal */}
+      {showGradeSheetModal && isMounted && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-transparent print:backdrop-none no-print-backdrop">
+          <div className="bg-slate-950 border border-indigo-500/30 rounded-3xl max-w-4xl w-full p-6 text-white shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
+            
+            {/* Modal Action Header Bar (3 Controls) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10 no-print">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-indigo-400" />
+                <h3 className="text-sm sm:text-base font-bold text-white">Academic Progress Snapshot Preview</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Control 1: Download PNG Button */}
+                <button
+                  onClick={handleGenerateGradeSheet}
+                  disabled={isGeneratingSnapshot}
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>{isGeneratingSnapshot ? "Generating PNG..." : "Download PNG"}</span>
+                </button>
+
+                {/* Control 2: Close Button */}
+                <button
+                  onClick={() => setShowGradeSheetModal(false)}
+                  className="h-8 w-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
+                  title="Close preview"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Printable Grade Sheet Container */}
+            <div className="overflow-y-auto custom-scrollbar pt-4 pr-1 space-y-6">
+              {/* Visible Grade Sheet Node Target */}
+              <div 
+                id="flow136-grade-sheet-export-node"
+                style={{ 
+                  backgroundColor: '#030712',
+                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+                }}
+                className="w-full h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-2xl p-6 shadow-2xl text-white relative overflow-hidden font-sans"
+              >
+                {/* Watermark Background (Z-Index 0) */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
+                  <span className="text-[120px] font-black tracking-tighter text-white/[0.03] transform -rotate-12 whitespace-nowrap">
+                    FLOW 136
+                  </span>
+                </div>
+
+                {/* Section 1: Header (Z-Index 10) */}
+                <div className="flex items-center justify-between pb-6 border-b border-white/10 relative z-10">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.25)]">
+                      <GraduationCap className="h-5 w-5 text-indigo-400" />
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-extrabold tracking-tight text-white">Flow136</h1>
+                      <span className="text-[10px] font-semibold tracking-widest text-indigo-400 uppercase block">
+                        OFFICIAL CURRICULUM PROGRESS & GRADE SHEET
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-indigo-300 block">
+                      {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Planner
+                    </span>
+                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">
+                      Target Goal: 136 Credits
+                    </p>
+                  </div>
+                </div>
+
+                {/* Section 2: Executive Status Bars & Standing (Z-Index 10) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 relative z-10">
+                  {/* Master Credits Box */}
+                  <div className="bg-slate-900/60 border border-indigo-500/20 p-4 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-400 font-medium uppercase tracking-wider text-[10px]">Total Degree Progress</span>
+                      <span className="text-white font-extrabold">{cumulativeStats.completedCredits} / 136 Cr Completed</span>
+                    </div>
+                    <div className="h-2.5 w-full bg-slate-955 border border-white/10 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
+                      />
+                    </div>
+                    {/* Mini Categories & Timeline Stats */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 text-[10px] text-zinc-400">
+                      <div>Program Core: <span className="text-zinc-200 font-semibold">{curriculumProgress.coreCompleted}/{curriculumProgress.coreTotal} Cr</span></div>
+                      <div>School Core: <span className="text-zinc-200 font-semibold">{curriculumProgress.schoolCoreCompleted}/{curriculumProgress.schoolCoreTotal} Cr</span></div>
+                      <div>GenEd Streams: <span className="text-zinc-200 font-semibold">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed}/39 Cr</span></div>
+                      <div>Major Electives: <span className="text-zinc-200 font-semibold">{curriculumProgress.electiveCompleted}/6 Cr</span></div>
+                      <div className="col-span-2 pt-2 border-t border-white/5 flex justify-between text-[10px] text-zinc-400">
+                        <span>Semesters Planned: <strong className="text-indigo-300">{semesters.length}</strong></span>
+                        <span>Completed Courses: <strong className="text-emerald-400">{semesters.reduce((acc, sem) => acc + sem.courses.filter(c => mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F")).length, 0) + (isCSE400Passed ? 1 : 0)}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Academic Standing & CGPA Display (ONLY in Mode B) */}
+                  {mode === 'gpa' && (
+                    <div className="bg-slate-900/60 border border-indigo-500/20 p-4 rounded-xl flex flex-col justify-between">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Cumulative CGPA</span>
+                        {cumulativeStats.cgpa >= 2.0 ? (
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Good Standing
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                            Probation Range
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-3xl font-extrabold text-white mt-1">
+                        {cumulativeStats.cgpa.toFixed(2)} <span className="text-xs text-zinc-500 font-normal">/ 4.00 Scale</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 leading-relaxed">
+                        Evaluated across chronologically latest attempts.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3: Completed Courses Table / Grade Sheet (Z-Index 10) */}
+                <div className="relative z-10 space-y-3">
+                  <h2 className="text-xs font-bold tracking-wider text-slate-300 uppercase">COMPLETED COURSEWORK</h2>
+                  
+                  {(() => {
+                    const exportCompletedCourses: Array<{ code: string; title: string; credits: number; grade: string; semesterName: string }> = [];
+                    
+                    semesters.forEach((sem, semIdx) => {
+                      const intake = semesterIntakes[semIdx];
+                      const semTermYear = `${sem.term || intake?.term || 'Spring'} ${sem.year || intake?.year || 2025}`;
+                      const semLabel = sem.isRS ? `RS (${semTermYear})` : `${sem.name} (${semTermYear})`;
+
+                      sem.courses.forEach(c => {
+                        if (c.code === "CSE400") return;
+                        const isComp = mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F");
+                        if (isComp) {
+                          const cData = COURSES.find(co => co.code === c.code);
+                          exportCompletedCourses.push({
+                            code: c.code,
+                            title: cData?.title || c.code,
+                            credits: cData?.category === "Non-Credit" ? 0 : (cData?.credits ?? 3),
+                            grade: c.grade || "-",
+                            semesterName: semLabel
+                          });
+                        }
+                      });
+                    });
+
+                    if (isCSE400Passed) {
+                      let capGrade = "-";
+                      for (const sem of semesters) {
+                        const found = sem.courses.find(c => c.code === "CSE400");
+                        if (found) {
+                          capGrade = found.grade || "-";
+                          break;
+                        }
+                      }
+                      exportCompletedCourses.push({
+                        code: "CSE400",
+                        title: "Final Year Capstone: Thesis, Project, or Internship",
+                        credits: 4,
+                        grade: capGrade,
+                        semesterName: "Capstone Phase"
+                      });
+                    }
+
+                    if (exportCompletedCourses.length === 0) {
+                      return (
+                        <div className="p-6 text-center text-slate-500 text-xs italic border border-white/10 rounded-xl bg-slate-900/40">
+                          No completed courses recorded yet.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="w-full border border-white/10 rounded-xl overflow-hidden bg-slate-900/40">
+                        <table className="w-full text-xs text-left border-collapse">
+                          <thead>
+                            <tr className="bg-white/5 border-b border-white/10 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider">
+                              <th className="py-2.5 px-3">Course Code</th>
+                              <th className="py-2.5 px-3">Title</th>
+                              <th className="py-2.5 px-3 text-center">Credits</th>
+                              {mode === 'gpa' && <th className="py-2.5 px-3 text-right">Grade</th>}
+                              <th className="py-2.5 px-3 text-right">Semester</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {exportCompletedCourses.map((item, idx) => (
+                              <tr key={`${item.code}_${idx}`} className="hover:bg-white/[0.02]">
+                                <td className="py-2 px-3 font-bold text-indigo-300">{item.code}</td>
+                                <td className="py-2 px-3 text-slate-300 font-medium">{item.title}</td>
+                                <td className="py-2 px-3 text-slate-400 text-center font-semibold">{item.credits} Cr</td>
+                                {mode === 'gpa' && (
+                                  <td className="py-2 px-3 font-bold text-emerald-400 text-right">{item.grade}</td>
+                                )}
+                                <td className="py-2 px-3 text-zinc-500 text-right text-[11px]">{item.semesterName}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Section 4: Footer Watermark (Z-Index 10) */}
+                <div className="border-t border-white/10 mt-4 pt-3 relative z-10 text-center">
+                  <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                    Flow136 &bull; Your curriculum, minus the complexity.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="pt-4 border-t border-white/10 flex justify-end gap-3 no-print">
+              <button
+                onClick={() => setShowGradeSheetModal(false)}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
