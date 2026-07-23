@@ -27,7 +27,8 @@ import {
   TrendingUp,
   FileText,
   List,
-  Columns
+  Columns,
+  ArrowRight
 } from "lucide-react";
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
 
@@ -133,7 +134,6 @@ const GRADING_SCALE: Record<string, number> = {
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // App settings/modes
   const [mode, setMode] = useState<'tracker' | 'gpa'>('tracker');
@@ -179,6 +179,7 @@ export default function Home() {
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
   const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
+  const [showDashboard, setShowDashboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [draggingCourseCode, setDraggingCourseCode] = useState<string | null>(null);
@@ -215,11 +216,6 @@ export default function Home() {
         if (parsed.projectCompleted !== undefined) setProjectCompleted(parsed.projectCompleted);
         if (parsed.internshipCompleted !== undefined) setInternshipCompleted(parsed.internshipCompleted);
         if (parsed.onboardingData) setOnboardingData(parsed.onboardingData);
-      }
-      
-      const welcomeShown = localStorage.getItem("bracu_cse_tracker_welcome_shown");
-      if (!welcomeShown) {
-        setShowWelcomeModal(true);
       }
     } catch (e) {
       console.error("Failed to load state from localStorage:", e);
@@ -509,27 +505,8 @@ export default function Home() {
   const handleResetData = () => {
     localStorage.removeItem("bracu_course_tracker_state");
     localStorage.removeItem("bracu_cse_tracker_welcome_shown");
-    setOnboardingData({
-      pathway: null,
-      foundationOption: null,
-      remedialEng091Checked: false,
-      remedialMat091Checked: false,
-      remedialMat092Checked: false,
-      creditOption: null,
-      rsTerm: "3rd Semester",
-      engStatusPriorToRS: null,
-      startingTerm: "Spring",
-      startingYear: 2025
-    });
-    setSemesters([]);
-    setThesisTrack('thesis');
-    setThesisSteps({ step1: false, step2: false, step3: false });
-    setProjectCompleted(false);
-    setInternshipCompleted(false);
-    setIsOnboarded(false);
-    setWizardStep(1);
-    setShowResetConfirm(false);
-    setShowWelcomeModal(true);
+    localStorage.removeItem("flow136_view_mode");
+    window.location.reload();
   };
 
   // Export JSON Backup
@@ -1772,11 +1749,175 @@ export default function Home() {
 
   const currentLayout = isMobile ? 'list' : viewMode;
 
+  if (!showDashboard) {
+    return (
+      <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-zinc-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
+        {/* Glow ambient background lights */}
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[150px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/10 blur-[150px] pointer-events-none" />
+
+        {/* Top Header/Bar for Landing */}
+        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-white/5 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                Flow136
+              </h1>
+              <p className="text-[10px] text-purple-400 font-semibold tracking-wide uppercase">Degree Planner</p>
+            </div>
+          </div>
+        </header>
+
+        {/* Hero Section */}
+        <main className="flex-grow flex flex-col items-center justify-center text-center px-4 py-16 relative z-10 max-w-6xl mx-auto w-full">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-300 mb-8 animate-pulse">
+            <GraduationCap className="h-4 w-4" />
+            <span>BRACU CSE Degree Companion</span>
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300 max-w-4xl mx-auto leading-[1.1] mb-6">
+            Welcome to Flow136
+          </h1>
+
+          <div className="max-w-2xl mx-auto mb-10 flex flex-col items-center">
+            <p className="text-xl md:text-2xl text-slate-200 font-semibold leading-relaxed">
+              Your curriculum, minus the complexity.
+            </p>
+            <p className="text-base md:text-lg text-slate-400 font-medium mt-2 leading-relaxed">
+              A progress tracker for BRACU CSE Undergrads.
+            </p>
+          </div>
+
+          {/* Glowing CTA Button */}
+          <div className="mb-20">
+            <button
+              onClick={() => setShowDashboard(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5"
+            >
+              <span>Continue to Tracker</span>
+              <ArrowRight className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Feature Highlights Grid */}
+          <div className="w-full">
+            <div className="text-center mb-10">
+              <h2 className="text-xs uppercase tracking-widest text-slate-400 font-bold">Core Features</h2>
+              <div className="h-1 w-12 bg-indigo-500 mx-auto mt-2 rounded-full" />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
+              {/* Feature 1 */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 transition-all">
+                  <GraduationCap className="h-6 w-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">CGPA Tracker</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Log grades, track semester GPAs, and monitor cumulative progress dynamically.
+                </p>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 transition-all">
+                  <BookOpen className="h-6 w-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">GenEd Progress Tracker</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Auto-validate GenEd stream distributions and ensure all graduation credits align.
+                </p>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 transition-all">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">CGPA ROI Analyzer</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Analyze retake options and see the exact return on investment for grade improvements.
+                </p>
+              </div>
+
+              {/* Feature 4 */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 mb-4 group-hover:bg-pink-500/20 transition-all">
+                  <Target className="h-6 w-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">Target CGPA Calculator</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Solve exactly what GPAs you need in future semesters to reach your target goals.
+                </p>
+              </div>
+
+              {/* Feature 5 */}
+              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 transition-all">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">Snapshot Progress</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Instantly download your official curriculum progress as a crisp PNG image.
+                </p>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        {/* Landing Page Footer */}
+        <footer className="w-full py-10 px-6 border-t border-white/5 bg-[#050507]/40 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
+          {/* Connect with me social links (Scaled Up) */}
+          <div className="flex flex-col md:flex-row items-center gap-5 text-sm font-semibold text-zinc-300">
+            <span className="text-sm lg:text-base font-bold text-slate-400 tracking-wider uppercase">Connect with me:</span>
+            <a
+              href="https://github.com/fakekhanabdullah"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,248,0.8)] active:scale-95 transition-all duration-300"
+            >
+              <svg className="h-5.5 w-5.5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+              <span>GitHub</span>
+            </a>
+            <span className="text-slate-600 select-none px-1">|</span>
+            <a
+              href="https://www.linkedin.com/in/khan-abdullahh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,248,0.8)] active:scale-95 transition-all duration-300"
+            >
+              <svg className="h-5.5 w-5.5 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+              <span>LinkedIn</span>
+            </a>
+          </div>
+
+          {/* Muted Copyright Disclaimer (Scaled Up) */}
+          <div className="text-xs text-zinc-450 leading-relaxed font-semibold">
+            <p>© 2026 Flow136. Made by: Khan Abdullah</p>
+          </div>
+
+          <p className="text-[10px] text-zinc-500 max-w-md leading-relaxed">
+            Disclaimer: Not officially affiliated with BRAC University. All curriculum guidelines and course codes reflect official CSE program requirements.
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-zinc-100 font-sans antialiased flex flex-col">
       {/* 1. Header Navigation */}
       <header className="border-b border-zinc-800/80 bg-[#050507]/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl shadow-black/30">
-        <div className="flex items-center gap-3">
+        <div 
+          onClick={() => setShowDashboard(false)}
+          className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
+          title="Back to Landing Page"
+        >
           <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
             <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
@@ -3097,64 +3238,6 @@ export default function Home() {
                 Wipe Data & Reset
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Welcome Onboarding Modal */}
-      {showWelcomeModal && isMounted && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-950/90 border border-zinc-800 p-8 rounded-3xl max-w-lg w-full text-center space-y-6 shadow-2xl relative overflow-hidden backdrop-blur-xl transition">
-            <div className="absolute -top-12 -right-12 h-32 w-32 bg-purple-500/10 rounded-full blur-2xl animate-pulse" />
-            <div className="absolute -bottom-12 -left-12 h-32 w-32 bg-cyan-500/10 rounded-full blur-2xl animate-pulse" />
-            
-            <div className="space-y-2">
-              <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 mb-2">
-                <GraduationCap className="h-6 w-6" />
-              </div>
-              <h2 className="text-2xl font-black tracking-tight text-white">
-                Welcome to Flow136 
-              </h2>
-              <p className="text-xs text-zinc-400 font-medium italic">
-                "Your curriculum, minus the complexity."
-              </p>
-            </div>
-
-            <div className="space-y-3 text-left">
-              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl flex items-start gap-3">
-                <span className="h-2 w-2 rounded-full bg-purple-500 mt-1.5 shrink-0" />
-                <div>
-                  <p className="font-bold text-xs text-white">100% Client-Side & Offline Ready</p>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">All data stays safely in your local browser cache.</p>
-                </div>
-              </div>
-
-              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl flex items-start gap-3">
-                <span className="h-2 w-2 rounded-full bg-cyan-500 mt-1.5 shrink-0" />
-                <div>
-                  <p className="font-bold text-xs text-white">39-Credit GenEd & Prerequisite Engine</p>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">Auto-tracks mandatory core and stream limits.</p>
-                </div>
-              </div>
-
-              <div className="bg-white/[0.02] border border-white/5 p-4 rounded-2xl flex items-start gap-3">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                <div>
-                  <p className="font-bold text-xs text-white">Dual Modes</p>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">Seamlessly switch between simple Course Tracking and live CGPA Planning.</p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                localStorage.setItem("bracu_cse_tracker_welcome_shown", "true");
-                setShowWelcomeModal(false);
-              }}
-              className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-2xl shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:shadow-[0_0_25px_rgba(139,92,246,0.4)] transition-all duration-300 transform active:scale-[0.98] uppercase tracking-wider"
-            >
-              Start Mapping My Degree
-            </button>
           </div>
         </div>
       )}
