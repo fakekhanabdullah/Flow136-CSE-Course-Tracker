@@ -25,7 +25,9 @@ import {
   Lock,
   Target,
   TrendingUp,
-  FileText
+  FileText,
+  List,
+  Columns
 } from "lucide-react";
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
 
@@ -177,11 +179,31 @@ export default function Home() {
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
   const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [draggingCourseCode, setDraggingCourseCode] = useState<string | null>(null);
+  const [draggingSourceSemesterId, setDraggingSourceSemesterId] = useState<string | null>(null);
+  const [dragOverSemesterId, setDragOverSemesterId] = useState<string | null>(null);
+
+  // Monitor screen width to automatically disable Kanban view on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Hydration fix & LocalStorage Loader
   useEffect(() => {
     setIsMounted(true);
     try {
+      const savedView = localStorage.getItem("flow136_view_mode");
+      if (savedView === "list" || savedView === "kanban") {
+        setViewMode(savedView);
+      }
+
       const savedState = localStorage.getItem("bracu_course_tracker_state");
       if (savedState) {
         const parsed = JSON.parse(savedState);
@@ -586,6 +608,24 @@ export default function Home() {
     }
   };
 
+  // Toggle view mode preference
+  const handleToggleViewMode = (mode: 'list' | 'kanban') => {
+    setViewMode(mode);
+    localStorage.setItem("flow136_view_mode", mode);
+  };
+
+  // Move a course from one semester to another via drag-and-drop (Atomic state transition)
+  const handleDragMoveCourse = (courseCode: string, sourceSemesterId: string, targetSemesterId: string) => {
+    if (sourceSemesterId === targetSemesterId) return;
+
+    const sourceSem = semesters.find(s => s.id === sourceSemesterId);
+    const courseObj = sourceSem?.courses.find(c => c.code === courseCode);
+    if (!courseObj) return;
+
+    handleMoveCourse(sourceSemesterId, targetSemesterId, courseObj);
+    setDragOverSemesterId(null);
+  };
+
   // Import JSON Backup
   const handleImportBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
     setBackupFileError(null);
@@ -822,8 +862,9 @@ export default function Home() {
       let hasGrades = false;
 
       sem.courses.forEach(c => {
+        if (c.code === "CSE400") return;
         const courseData = COURSES.find(co => co.code === c.code);
-        const credits = c.code === "CSE400" ? 4 : (courseData?.credits ?? 3);
+        const credits = courseData?.credits ?? 3;
         
         // Non-credit courses carry 0 credits
         if (courseData?.category === "Non-Credit") return;
@@ -831,9 +872,6 @@ export default function Home() {
         totalLoad += credits;
 
         let isComp = c.isCompleted;
-        if (c.code === "CSE400") {
-          isComp = isCSE400Passed;
-        }
         if (mode === 'gpa' && isComp && c.grade && GRADING_SCALE[c.grade] !== undefined) {
           gradableCredits += credits;
           totalPoints += GRADING_SCALE[c.grade] * credits;
@@ -1070,16 +1108,13 @@ export default function Home() {
 
     const isScenarioB = onboardingData.pathway === 'credit' && (onboardingData.creditOption === 'opt2' || onboardingData.engStatusPriorToRS === 'caseD');
 
-    // 1. Program Core (Mandatory): Target = 79 Credits
+    // 1. Program Core (Mandatory): Target = 75 Credits (CSE400 Thesis is tracked separately)
     let coreCompleted = 0;
     COURSES.forEach(c => {
+      if (c.code === "CSE400") return; // Tracked separately
       if (c.category === "CSE Program Core" && c.mandatory) {
-        let isComp = completedCodes.has(c.code);
-        if (c.code === "CSE400") {
-          isComp = isCSE400Passed;
-        }
-        if (isComp) {
-          coreCompleted += (c.code === "CSE400" ? 4 : c.credits);
+        if (completedCodes.has(c.code)) {
+          coreCompleted += c.credits;
         }
       }
     });
@@ -1233,7 +1268,7 @@ export default function Home() {
 
     return {
       coreCompleted,
-      coreTotal: 79,
+      coreTotal: 75,
       schoolCoreCompleted,
       schoolCoreTotal: 12,
       electiveCompleted,
@@ -1249,7 +1284,9 @@ export default function Home() {
       stream5Completed,
       stream5Total: 3,
       freeGenEdCredits,
-      freeGenEdTotal: 6
+      freeGenEdTotal: 6,
+      thesisCompleted: isCSE400Passed ? 4 : 0,
+      thesisTotal: 4
     };
   }, [semesters, mode, isCSE400Passed, onboardingData.pathway, onboardingData.creditOption, onboardingData.engStatusPriorToRS]);
 
@@ -1510,7 +1547,7 @@ export default function Home() {
       );
     }
 
-    return list.slice(0, 30); // cap size for clean rendering
+    return list.slice(0, 200); // cap size to prevent layout lag without truncating category tabs
   }, [courseSearchQuery, courseSearchFilter]);
 
   const CSE400 = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) => {
@@ -1527,8 +1564,8 @@ export default function Home() {
             <p className="text-xs text-zinc-450 mt-1">Final Year Capstone: Thesis, Project, or Internship</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold bg-zinc-950/40 border border-zinc-800 text-zinc-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
-              4 Credits
+            <span className="text-[10px] font-bold bg-zinc-950/40 border border-zinc-800 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
+              {isCSE400Passed ? "Completed: 4 / 4 Cr" : "Incomplete: 0 / 4 Cr"}
             </span>
             {isCSE400Passed ? (
               <span className="text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
@@ -1732,6 +1769,8 @@ export default function Home() {
       </div>
     );
   }
+
+  const currentLayout = isMobile ? 'list' : viewMode;
 
   return (
     <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-zinc-100 font-sans antialiased flex flex-col">
@@ -2414,6 +2453,20 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {/* Capstone Thesis */}
+                    <div>
+                      <div className="flex justify-between text-[11px] mb-1">
+                        <span className="text-zinc-350 font-semibold">Capstone Thesis (CSE400)</span>
+                        <span className="text-zinc-500 font-extrabold">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
+                      </div>
+                      <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.thesisCompleted / curriculumProgress.thesisTotal) * 100}%` }}
+                          className="h-full bg-purple-500/80 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </div>
+
                     {/* 2. School Core (Math & Sciences) */}
                     <div>
                       <div className="flex justify-between text-[11px] mb-1">
@@ -2547,6 +2600,32 @@ export default function Home() {
                 <h2 className="text-base font-bold tracking-tight text-white">Curriculum Plan Semester Cards</h2>
               </div>
               <div className="flex items-center gap-2">
+                {/* View Switcher Toggle (Hidden on mobile) */}
+                <div className="hidden md:flex items-center bg-zinc-950 border border-zinc-800 rounded-lg p-0.5 shadow-inner mr-2">
+                  <button
+                    onClick={() => handleToggleViewMode("list")}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      currentLayout === "list"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    <span>List Feed</span>
+                  </button>
+                  <button
+                    onClick={() => handleToggleViewMode("kanban")}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      currentLayout === "kanban"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    <Columns className="h-3.5 w-3.5" />
+                    <span>Kanban Board</span>
+                  </button>
+                </div>
+
                 <button
                   onClick={handleToggleAllCollapse}
                   className="bg-zinc-900/60 border border-zinc-800/80 hover:bg-indigo-500/10 hover:border-indigo-500/20 text-zinc-300 hover:text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
@@ -2564,7 +2643,7 @@ export default function Home() {
             </div>
 
             {/* List of Semester Cards */}
-            <div className="space-y-6">
+            <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-3 px-1 items-end snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
               {semesters.map((sem, semIdx) => {
                 const stats = semesterStats.find(s => s.id === sem.id);
                 const hasCSE400 = sem.courses.some(c => c.code === "CSE400");
@@ -2574,10 +2653,28 @@ export default function Home() {
                 return (
                   <div 
                     key={sem.id}
-                    className="bg-zinc-950/75 border border-zinc-850 rounded-2xl overflow-hidden shadow-xl backdrop-blur-md hover:border-zinc-800 transition-all duration-300"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const code = e.dataTransfer.getData("text/plain");
+                      if (draggingSourceSemesterId) {
+                        handleDragMoveCourse(code, draggingSourceSemesterId, sem.id);
+                      }
+                    }}
+                    onDragEnter={() => setDragOverSemesterId(sem.id)}
+                    onDragLeave={() => setDragOverSemesterId(null)}
+                    className={`${
+                      currentLayout === 'kanban' 
+                        ? "w-[340px] min-w-[340px] flex-shrink-0 snap-start scale-y-[-1]" 
+                        : ""
+                    } bg-zinc-955/70 border rounded-2xl overflow-visible shadow-xl backdrop-blur-md hover:border-zinc-800 transition-all duration-300 ${
+                      draggingCourseCode && dragOverSemesterId === sem.id 
+                        ? "border-dashed border-2 border-indigo-500 bg-indigo-500/5 shadow-[0_0_20px_rgba(99,102,241,0.15)]" 
+                        : "border-zinc-850"
+                    }`}
                   >
                                   {/* Semester Card Header */}
-                    <div className={`bg-white/[0.02] px-5 py-4 flex flex-wrap items-center justify-between gap-3 ${sem.isCollapsed ? "" : "border-b border-white/5"}`}>
+                    <div className={`bg-white/[0.02] px-5 py-4 flex flex-wrap items-center justify-between gap-3 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-white/5"}`}>
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <span className="h-2 w-2 rounded-full bg-purple-500 shadow-[0_0_6px_#8b5cf6]" />
                         <h3 className="font-bold text-sm text-white tracking-tight flex flex-wrap items-center gap-2">
@@ -2688,7 +2785,29 @@ export default function Home() {
                         return (
                           <div 
                             key={c.code}
-                            className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs group"
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", c.code);
+                              setDraggingSourceSemesterId(sem.id);
+                              setTimeout(() => {
+                                setDraggingCourseCode(c.code);
+                              }, 0);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingCourseCode(null);
+                              setDraggingSourceSemesterId(null);
+                            }}
+                            className={`flex justify-between gap-3 text-xs group transition-all duration-200 ${
+                              currentLayout === 'kanban' 
+                                ? "flex-col p-3.5 border border-zinc-800/85 rounded-xl bg-zinc-900/45 hover:bg-zinc-900/70 hover:border-zinc-700/60 shadow-md mb-3 cursor-grab" 
+                                : "flex-col md:flex-row md:items-center py-3.5 border-b border-zinc-800/40 last:border-b-0 relative"
+                            } ${
+                              draggingCourseCode === c.code 
+                                ? currentLayout === 'kanban'
+                                  ? "scale-105 shadow-2xl cursor-grabbing border-indigo-500 bg-indigo-955/25" 
+                                  : "bg-indigo-955/20"
+                                : ""
+                            }`}
                           >
                             <div className="flex items-start gap-3">
                               
@@ -3167,6 +3286,7 @@ export default function Home() {
                       <div>School Core: <span className="text-zinc-200 font-semibold">{curriculumProgress.schoolCoreCompleted}/{curriculumProgress.schoolCoreTotal} Cr</span></div>
                       <div>GenEd Streams: <span className="text-zinc-200 font-semibold">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed}/39 Cr</span></div>
                       <div>Major Electives: <span className="text-zinc-200 font-semibold">{curriculumProgress.electiveCompleted}/6 Cr</span></div>
+                      <div className="col-span-2">Capstone Thesis: <span className="text-zinc-200 font-semibold">{curriculumProgress.thesisCompleted}/{curriculumProgress.thesisTotal} Cr</span></div>
                       <div className="col-span-2 pt-2 border-t border-white/5 flex justify-between text-[10px] text-zinc-400">
                         <span>Semesters Planned: <strong className="text-indigo-300">{semesters.length}</strong></span>
                         <span>Completed Courses: <strong className="text-emerald-400">{semesters.reduce((acc, sem) => acc + sem.courses.filter(c => mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F")).length, 0) + (isCSE400Passed ? 1 : 0)}</strong></span>
