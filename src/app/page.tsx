@@ -26,6 +26,7 @@ import {
   Target,
   TrendingUp,
   FileText,
+  Camera,
   List,
   Columns,
   ArrowRight
@@ -2029,16 +2030,16 @@ export default function Home() {
         {/* Top Header/Bar for Landing */}
         <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-slate-800/40 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
                 Flow136
               </h1>
-              <p className="text-[10px] text-purple-400 font-semibold tracking-wide uppercase">Degree Planner</p>
+              <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
             </div>
           </div>
         </header>
@@ -2129,7 +2130,7 @@ export default function Home() {
               {/* Feature 5 */}
               <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
                 <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 transition-all">
-                  <FileText className="h-6 w-6" />
+                  <Camera className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">Snapshot Progress</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
@@ -2190,13 +2191,13 @@ export default function Home() {
             className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all relative z-20 shrink-0"
             title="Back to Landing Page"
           >
-            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
                 Flow136
               </h1>
               <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
@@ -2260,9 +2261,6 @@ export default function Home() {
 
               {showDataDropdown && (
                 <div className="absolute right-0 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
-                  <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 mb-1">
-                    Menu Options
-                  </div>
                   <button
                     onClick={() => {
                       handleExportBackup();
@@ -2291,9 +2289,9 @@ export default function Home() {
                       setShowGradeSheetModal(true);
                       setShowDataDropdown(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition border-t border-slate-800/40 mt-1 pt-2"
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
                   >
-                    <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                    <Camera className="h-3.5 w-3.5 text-indigo-400" />
                     <span>Snapshot Progress</span>
                   </button>
                 </div>
@@ -2310,22 +2308,21 @@ export default function Home() {
             </button>
           </div>
         </div>
-
-        {/* Mobile Header Layout (Screens < 1024px - Vertically Stacked & Center-Aligned) */}
+        {/* Mobile Header Layout (Screens < 1024px - Vertically Stacked & Center-Aligned) */}
         <div className="flex lg:hidden flex-col items-center text-center gap-4 w-full">
           {/* 1. Logo and Catchphrase */}
           <div 
             onClick={() => setShowDashboard(false)}
-            className="flex flex-col items-center gap-1.5 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
+            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
             title="Back to Landing Page"
           >
-            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
+              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
-            <div className="flex flex-col items-center">
-              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+            <div className="flex flex-col items-start text-left">
+              <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
                 Flow136
               </h1>
               <p className="text-[10px] text-purple-400 font-semibold tracking-wide mt-0.5">Your curriculum, minus the complexity.</p>
@@ -2356,83 +2353,84 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 3. Feeling lost? button */}
-          <button
-            onClick={() => setShowRoadmapModal(true)}
-            className="w-full max-w-[240px] inline-flex items-center justify-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white text-xs font-semibold py-2.5 rounded-xl transition-all cursor-pointer shadow-sm"
-          >
-            <HelpCircle className="h-4 w-4 text-indigo-400" />
-            <span>Feeling lost?</span>
-          </button>
-
-          {/* 4. Hamburger Menu */}
-          <div className="relative w-full max-w-[240px]">
+          {/* 3. Actions Row: Help, Reset, Hamburger */}
+          <div className="w-full max-w-[240px] flex gap-2 justify-center">
+            {/* Help/Roadmap Button */}
             <button
-              onClick={() => {
-                setShowHeaderMenu(!showHeaderMenu);
-                setShowDataDropdown(false);
-              }}
-              className={`w-full py-2.5 rounded-xl border flex items-center justify-center gap-2 transition-all text-xs font-semibold cursor-pointer ${
-                showHeaderMenu 
-                  ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
-                  : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
-              }`}
+              onClick={() => setShowRoadmapModal(true)}
+              className="h-10 w-10 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm"
+              title="View recommended CSE/CS curriculum roadmap"
             >
-              <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
+              <HelpCircle className="h-4.5 w-4.5 text-indigo-400" />
             </button>
 
-            {showHeaderMenu && (
-              <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
-                <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 mb-1">
-                  Menu Options
-                </div>
-                <button
-                  onClick={() => {
-                    handleExportBackup();
-                    setShowHeaderMenu(false);
-                  }}
-                  className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
-                >
-                  <Download className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>Backup</span>
-                </button>
-                <label className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 cursor-pointer transition">
-                  <Upload className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>Restore</span>
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={(e) => {
-                      handleImportBackup(e);
+            {/* Reset Button */}
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="h-10 w-10 bg-rose-950/10 hover:bg-rose-950/20 border border-rose-900/20 text-rose-400 flex items-center justify-center rounded-xl transition cursor-pointer"
+              title="Reset Tracker Defaults"
+            >
+              <RotateCcw className="h-4 w-4 text-rose-400" />
+            </button>
+
+            {/* Hamburger Menu Wrapper */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowHeaderMenu(!showHeaderMenu);
+                  setShowDataDropdown(false);
+                }}
+                className={`h-10 w-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                  showHeaderMenu 
+                    ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
+                    : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
+                }`}
+                title="Menu"
+              >
+                <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              </button>
+
+              {showHeaderMenu && (
+                <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
+                  <button
+                    onClick={() => {
+                      handleExportBackup();
                       setShowHeaderMenu(false);
                     }}
-                    className="hidden"
-                  />
-                </label>
-                <button
-                  onClick={() => {
-                    setShowGradeSheetModal(true);
-                    setShowHeaderMenu(false);
-                  }}
-                  className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition border-t border-slate-800/40 mt-1 pt-2"
-                >
-                  <FileText className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>Snapshot Progress</span>
-                </button>
-              </div>
-            )}
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                  >
+                    <Download className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Backup</span>
+                  </button>
+                  <label className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 cursor-pointer transition">
+                    <Upload className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Restore</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        handleImportBackup(e);
+                        setShowHeaderMenu(false);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={() => {
+                      setShowGradeSheetModal(true);
+                      showHeaderMenu(false);
+                    }}
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Snapshot Progress</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-
-          {/* 5. Reset button */}
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="w-full max-w-[240px] py-2.5 bg-rose-950/10 hover:bg-rose-950/20 border border-rose-900/20 text-rose-400 text-xs font-bold flex items-center justify-center gap-2 rounded-xl transition cursor-pointer"
-          >
-            <RotateCcw className="h-4 w-4 text-rose-400" />
-            <span>Reset Tracker Defaults</span>
-          </button>
         </div>
       </header>
 
@@ -4012,7 +4010,7 @@ export default function Home() {
             {/* Modal Action Header Bar (3 Controls) */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800/60 no-print">
               <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-indigo-400" />
+                <Camera className="h-5 w-5 text-indigo-400" />
                 <h3 className="text-sm sm:text-base font-bold text-slate-100">Academic Progress Snapshot Preview</h3>
               </div>
               <div className="flex items-center gap-3">
