@@ -33,7 +33,7 @@ import {
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
 
 // Prerequisite Helper functions
-const getCoursePrereqs = (courseCode: string, pathway: 'foundation' | 'credit' | null) => {
+const getCoursePrereqs = (courseCode: string, pathway: 'foundation' | 'credit' | null, creditOption?: 'opt1' | 'opt2' | null) => {
   const rule = PREREQUISITES[courseCode] || { hp: [], sp: [] };
   let hp = rule.hp || [];
   let sp = rule.sp || [];
@@ -41,6 +41,10 @@ const getCoursePrereqs = (courseCode: string, pathway: 'foundation' | 'credit' |
   if (pathway === 'credit') {
     hp = hp.filter(code => !["ENG091", "MAT091", "MAT092"].includes(code));
     sp = sp.filter(code => !["ENG091", "MAT091", "MAT092"].includes(code));
+    if (creditOption === 'opt2') {
+      hp = hp.filter(code => code !== "ENG101");
+      sp = sp.filter(code => code !== "ENG101");
+    }
   }
 
   return { hp, sp };
@@ -172,6 +176,19 @@ export default function Home() {
   const [swappingCourseCode, setSwappingCourseCode] = useState<string | null>(null);
   const [courseSearchQuery, setCourseSearchQuery] = useState("");
   const [courseSearchFilter, setCourseSearchFilter] = useState("All");
+  const [activeCategorySelectorKey, setActiveCategorySelectorKey] = useState<string | null>(null);
+  const [selectedCategoryCourseCode, setSelectedCategoryCourseCode] = useState<string>("");
+  const [selectedCategoryTargetSemesterId, setSelectedCategoryTargetSemesterId] = useState<string>("");
+  const [categoryCourseSearchQuery, setCategoryCourseSearchQuery] = useState<string>("");
+
+  useEffect(() => {
+    if (activeCategorySelectorKey && semesters.length > 0) {
+      setSelectedCategoryTargetSemesterId(semesters[semesters.length - 1].id);
+      setSelectedCategoryCourseCode("");
+      setCategoryCourseSearchQuery("");
+    }
+  }, [activeCategorySelectorKey, semesters]);
+
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
   const [targetCgpa, setTargetCgpa] = useState<string>("3.50");
@@ -179,6 +196,7 @@ export default function Home() {
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
   const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
+  const [showRoadmapModal, setShowRoadmapModal] = useState<boolean>(false);
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [isMobile, setIsMobile] = useState<boolean>(false);
@@ -221,6 +239,22 @@ export default function Home() {
       console.error("Failed to load state from localStorage:", e);
     }
   }, []);
+
+  // Trigger Recommended Curriculum Modal if user completes onboarding and has 0 courses
+  useEffect(() => {
+    if (!isMounted || !isOnboarded || semesters.length === 0) return;
+    
+    // Count total courses currently added across all semesters
+    const totalCourses = semesters.reduce((acc, sem) => acc + (sem.courses || []).length, 0);
+    
+    if (totalCourses === 0) {
+      const autoShown = localStorage.getItem("flow136_roadmap_auto_shown");
+      if (!autoShown) {
+        setShowRoadmapModal(true);
+        localStorage.setItem("flow136_roadmap_auto_shown", "true");
+      }
+    }
+  }, [isMounted, isOnboarded, semesters]);
 
   // Synchronize RS card 4th course dynamically based on preceding ENG102 completion
   useEffect(() => {
@@ -705,17 +739,8 @@ export default function Home() {
 
     semesters.forEach((sem, semIdx) => {
       sem.courses.forEach(c => {
-        const existing = result[c.code];
-        if (!existing) {
-          result[c.code] = { semesterIdx: semIdx, course: c };
-        } else {
-          // Prefer the latest graded attempt for CGPA.
-          const newHasGrade = c.grade !== "";
-          const existingHasGrade = existing.course.grade !== "";
-          if (newHasGrade || !existingHasGrade) {
-            result[c.code] = { semesterIdx: semIdx, course: c };
-          }
-        }
+        // Chronologically latest attempt always replaces any previous attempt
+        result[c.code] = { semesterIdx: semIdx, course: c };
       });
     });
 
@@ -975,7 +1000,7 @@ export default function Home() {
 
     semesters.forEach((sem, semIdx) => {
       sem.courses.forEach(c => {
-        const { hp, sp } = getCoursePrereqs(c.code, onboardingData.pathway);
+        const { hp, sp } = getCoursePrereqs(c.code, onboardingData.pathway, onboardingData.creditOption);
 
         // Check Hard Prerequisites (blocking)
         const missingHp = hp.filter(code => !isCourseCompletedPrior(code, semIdx, semesters, mode));
@@ -993,7 +1018,7 @@ export default function Home() {
     });
 
     return warnings;
-  }, [semesters, mode, onboardingData.pathway]);
+  }, [semesters, mode, onboardingData.pathway, onboardingData.creditOption]);
 
   // Retake & Repeat Badges and Warnings
   // Evaluates every course row contextually
@@ -1405,6 +1430,14 @@ export default function Home() {
     setCourseSearchQuery("");
   };
 
+  const handleAddCategoryCourse = () => {
+    if (!selectedCategoryCourseCode || !selectedCategoryTargetSemesterId) return;
+    handleAddCourseToSemester(selectedCategoryTargetSemesterId, selectedCategoryCourseCode);
+    setActiveCategorySelectorKey(null);
+    setSelectedCategoryCourseCode("");
+    setCategoryCourseSearchQuery("");
+  };
+
   const handleMoveCourse = (sourceSemId: string, destSemId: string, course: SelectedCourse) => {
     const updated = semesters.map(sem => {
       // Remove from source
@@ -1453,7 +1486,7 @@ export default function Home() {
       ...sem,
       courses: sem.courses.map(c => {
         if (c.code === "CSE400") {
-          return { ...c, grade };
+          return { ...c, grade, isCompleted: grade !== "" };
         }
         return c;
       })
@@ -1470,7 +1503,8 @@ export default function Home() {
             if (c.code === courseCode) {
               return {
                 ...c,
-                grade
+                grade,
+                isCompleted: grade !== "" ? true : c.isCompleted
               };
             }
             return c;
@@ -1491,7 +1525,8 @@ export default function Home() {
             if (c.code === courseCode) {
               return {
                 ...c,
-                isCompleted
+                isCompleted,
+                grade: !isCompleted ? "" : c.grade
               };
             }
             return c;
@@ -1526,6 +1561,109 @@ export default function Home() {
 
     return list.slice(0, 200); // cap size to prevent layout lag without truncating category tabs
   }, [courseSearchQuery, courseSearchFilter]);
+
+  // Category Course Selection Modal Memos
+  const getCompletedCourseState = useCallback((courseCode: string) => {
+    for (const sem of semesters) {
+      const found = sem.courses.find(c => c.code === courseCode);
+      if (found) {
+        const isComp = mode === 'tracker' 
+          ? found.isCompleted 
+          : (found.isCompleted && found.grade !== "");
+        if (isComp) {
+          return { isCompleted: true, grade: found.grade };
+        }
+      }
+    }
+    if (courseCode === "CSE400" && isCSE400Passed) {
+      return { isCompleted: true, grade: "" };
+    }
+    return { isCompleted: false, grade: "" };
+  }, [semesters, mode, isCSE400Passed]);
+
+  const categoryDetails = useMemo(() => {
+    if (!activeCategorySelectorKey) return { name: "", desc: "" };
+    switch (activeCategorySelectorKey) {
+      case 'core':
+        return { name: "Program Core (Mandatory)", desc: "Mandatory Core Computing Courses" };
+      case 'thesis':
+        return { name: "Capstone Thesis (CSE400)", desc: "Final Year Capstone Phase" };
+      case 'schoolCore':
+        return { name: "School Core", desc: "Mathematics & Natural Sciences Core Requirements" };
+      case 'electives':
+        return { name: "CSE Major Electives", desc: "Major Elective Specialization Tracks" };
+      case 'stream1':
+        return { name: "GenEd Stream 1 (Writing Comprehension)", desc: "Writing Comprehension Electives" };
+      case 'stream2':
+        return { name: "GenEd Stream 2 (Math & Natural Sciences)", desc: "Math & Natural Sciences Electives" };
+      case 'stream3':
+        return { name: "GenEd Stream 3 (Arts & Humanities)", desc: "Arts & Humanities Electives" };
+      case 'stream4':
+        return { name: "GenEd Stream 4 (Social Sciences)", desc: "Social Sciences Electives" };
+      case 'stream5':
+        return { name: "GenEd Stream 5 (Communities / CST)", desc: "Communities & Civilizations Studies" };
+      case 'freeGenEd':
+        return { name: "GenEd Electives (Free Choice)", desc: "Free Choice Stream Electives (any Stream 1-5 course)" };
+      default:
+        return { name: "Add Course", desc: "" };
+    }
+  }, [activeCategorySelectorKey]);
+
+  const categoryFilteredCourses = useMemo(() => {
+    if (!activeCategorySelectorKey) return [];
+    
+    const isMandatoryGenEd = (code: string) => {
+      const mandatoryCodes = ["ENG101", "ENG102", "ENG103", "MAT110", "PHY111", "STA201", "BNG103", "HUM103", "EMB101"];
+      return mandatoryCodes.includes(code);
+    };
+
+    let list: Course[] = [];
+    switch (activeCategorySelectorKey) {
+      case 'core':
+        list = COURSES.filter(c => c.category === "CSE Program Core" && c.code !== "CSE400");
+        break;
+      case 'thesis':
+        list = COURSES.filter(c => c.code === "CSE400");
+        break;
+      case 'schoolCore':
+        list = COURSES.filter(c => c.category === "School Core (Math & Sciences)");
+        break;
+      case 'electives':
+        list = COURSES.filter(c => c.category === "CSE Major Elective");
+        break;
+      case 'stream1':
+        list = COURSES.filter(c => c.category === "GenEd Stream 1");
+        break;
+      case 'stream2':
+        list = COURSES.filter(c => c.category === "GenEd Stream 2");
+        break;
+      case 'stream3':
+        list = COURSES.filter(c => c.category === "GenEd Stream 3");
+        break;
+      case 'stream4':
+        list = COURSES.filter(c => c.category === "GenEd Stream 4");
+        break;
+      case 'stream5':
+        list = COURSES.filter(c => c.category === "GenEd Stream 5");
+        break;
+      case 'freeGenEd':
+        list = COURSES.filter(c => c.category.startsWith("GenEd") && !isMandatoryGenEd(c.code));
+        break;
+      default:
+        list = [];
+    }
+
+    // Also apply text search filtering if active
+    if (categoryCourseSearchQuery.trim() !== "") {
+      const q = categoryCourseSearchQuery.toLowerCase();
+      list = list.filter(c => 
+        c.code.toLowerCase().includes(q) || 
+        c.title.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [activeCategorySelectorKey, categoryCourseSearchQuery]);
 
   const CSE400 = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) => {
     return (
@@ -1980,6 +2118,15 @@ export default function Home() {
             </label>
 
             <button
+              onClick={() => setShowRoadmapModal(true)}
+              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
+              title="View recommended CSE/CS curriculum roadmap"
+            >
+              <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Feeling lost?</span>
+            </button>
+
+            <button
               onClick={() => setShowGradeSheetModal(true)}
               className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-indigo-500/30 text-slate-200 hover:text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
               title="Open official progress grade sheet preview modal"
@@ -2417,44 +2564,44 @@ export default function Home() {
           <div className="flex-1 flex flex-col lg:flex-row gap-6">
             
             {/* A. LEFT SIDEBAR: Degree Progress & Statistics */}
-            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-48px)] flex flex-col pb-6">
+            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-48px)] flex flex-col gap-6 lg:overflow-y-auto pr-2 custom-scrollbar pb-6">
               
-              {/* Unified Progress & Requirements Module */}
-              <div className="bg-zinc-950/75 border border-zinc-855 rounded-2xl shadow-2xl shadow-black/45 backdrop-blur-md flex flex-col lg:max-h-full overflow-hidden p-0">
-                <div className="w-full overflow-y-auto p-5 pr-3 custom-scrollbar flex flex-col lg:max-h-full">
+              {/* 1. Degree Standing Card */}
+              <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
+                <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-500/[0.02] rounded-full blur-2xl pointer-events-none" />
                 
-                {/* 1. Top Section: Degree Standing Header & Completed Credits progress bar */}
-                <div className="relative overflow-hidden mb-4 shrink-0">
-                  <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-                  
-                  <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2 mb-3">
-                    <GraduationCap className="h-4 w-4" />
-                    Degree Standing
-                  </h2>
-                  
-                  <div className="space-y-3">
-                    {/* Credit Progress */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
-                        <span className="text-zinc-400 font-medium">Completed Credits</span>
-                        <span className="text-white font-extrabold">{cumulativeStats.completedCredits} / 136 Cr</span>
-                      </div>
-                      <div className="h-3 w-full bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
-                          className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
-                        />
-                      </div>
+                <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2 mb-4">
+                  <GraduationCap className="h-4 w-4" />
+                  Degree Standing
+                </h2>
+                
+                <div className="space-y-4">
+                  {/* Credit Progress */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1.5">
+                      <span className="text-zinc-400 font-medium">Completed Credits</span>
+                      <span className="text-white font-extrabold">{cumulativeStats.completedCredits} / 136 Cr</span>
+                    </div>
+                    <div className="h-3 w-full bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                      />
                     </div>
                   </div>
                 </div>
+              </div>
 
                 {/* 2. Middle Section: Cumulative CGPA display, Probation Badge, and the Target CGPA Solver widget */}
                 {mode === 'gpa' && (
-                  <div className="space-y-4 mb-4 shrink-0">
-                    
+                  <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
+                    <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      GPA Dashboard
+                    </h2>
+
                     {/* Cumulative CGPA Box */}
-                    <div className="bg-zinc-900/30 border border-zinc-855 p-5 rounded-xl flex flex-col gap-3 shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className="bg-zinc-900/15 border border-zinc-900/40 p-5 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(99,102,241,0.03)]">
                       <div>
                         <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Cumulative CGPA</p>
                         <p className="text-3xl lg:text-4xl font-extrabold text-white mt-1 tracking-tight">
@@ -2475,7 +2622,7 @@ export default function Home() {
                     </div>
 
                     {/* Target CGPA Solver Widget */}
-                    <div className="bg-zinc-900/30 border border-zinc-855 p-5 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className="bg-zinc-900/15 border border-zinc-900/40 p-5 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -2499,7 +2646,7 @@ export default function Home() {
                       </div>
 
                       {targetSolverResult.isAchieved ? (
-                        <div className="text-sm leading-relaxed text-slate-350">
+                        <div className="text-xs leading-relaxed text-slate-350">
                           🎉 Graduation requirements met! Your final CGPA is <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
                         </div>
                       ) : targetSolverResult.requiredGpa > 4.00 ? (
@@ -2508,14 +2655,14 @@ export default function Home() {
                           <p>This target is mathematically out of reach. If you score a flat 4.00 (all A's) across your remaining credits, your maximum possible graduation CGPA will be <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.</p>
                         </div>
                       ) : (
-                        <div className="text-sm leading-relaxed text-slate-300">
+                        <div className="text-xs leading-relaxed text-slate-300">
                           To reach <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetCgpa}</span>, you need to maintain an average semester grade of <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.requiredGpa.toFixed(2)}</span> (approx. <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.letterEquivalent}</span>) over your remaining <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.remainingCredits} credits</span>.
                         </div>
                       )}
                     </div>
 
                     {/* Repeat ROI Analyzer Widget */}
-                    <div className="bg-zinc-900/30 border border-zinc-855 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className="bg-zinc-900/15 border border-zinc-900/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)]">
                       <div className="p-5 flex items-center justify-between border-b border-white/5 bg-zinc-950/20">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
@@ -2525,6 +2672,7 @@ export default function Home() {
                         </div>
                         
                         <button
+                          type="button"
                           onClick={() => setRoiExpanded(!roiExpanded)}
                           className="text-zinc-500 font-bold text-[10px] bg-zinc-900 px-2 py-1 rounded border border-zinc-800 flex items-center gap-1.5 hover:text-indigo-400 transition"
                         >
@@ -2536,7 +2684,7 @@ export default function Home() {
                       {roiExpanded && (
                         <div className="p-5 border-t border-zinc-850 bg-zinc-950/10 space-y-3">
                           {roiRecommendations.length === 0 ? (
-                            <div className="text-sm text-zinc-500 py-2 leading-relaxed">
+                            <div className="text-xs text-zinc-500 py-2 leading-relaxed">
                               No C- to B- range courses found to repeat.
                             </div>
                           ) : (
@@ -2552,7 +2700,7 @@ export default function Home() {
                                     <div className="flex items-center gap-2">
                                       <span className="text-[9px] font-bold text-zinc-550 w-3">{idx + 1}.</span>
                                       <span className="font-bold text-zinc-200">{item.code}</span>
-                                      <span className="text-[10px] text-zinc-500 bg-zinc-900 px-1 rounded border border-zinc-850">{item.currentGrade}</span>
+                                      <span className="text-[10px] text-zinc-550 bg-zinc-900 px-1 rounded border border-zinc-855">{item.currentGrade}</span>
                                     </div>
                                     <div className="text-right text-[11px]">
                                       <span className="text-indigo-400 font-bold">+{item.delta.toFixed(3)} CGPA</span>
@@ -2569,20 +2717,21 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 3. Divider */}
-                <div className="border-t border-white/10 my-4 shrink-0" />
-
-                {/* 4. Bottom Section: Category Requirements */}
-                <div className="space-y-3">
+                {/* 3. Bottom Section: Category Requirements */}
+                <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
                   <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
                     Category Requirements
                   </h2>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3.5">
                     {/* 1. Mandatory Core */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('core')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-350 font-semibold">Program Core (Mandatory)</span>
                         <span className="text-zinc-500 font-extrabold">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
                       </div>
@@ -2592,12 +2741,14 @@ export default function Home() {
                           className="h-full bg-indigo-500 rounded-full transition-all duration-300"
                         />
                       </div>
-                    </div>
+                    </button>
 
                     {/* Capstone Thesis */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
-                        <span className="text-zinc-350 font-semibold">Capstone Thesis (CSE400)</span>
+                    <div
+                      className="w-full bg-zinc-900/15 border border-zinc-900/40 rounded-xl p-3.5 flex flex-col gap-2"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-355 font-semibold">Capstone Thesis (CSE400)</span>
                         <span className="text-zinc-500 font-extrabold">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
                       </div>
                       <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
@@ -2609,9 +2760,13 @@ export default function Home() {
                     </div>
 
                     {/* 2. School Core (Math & Sciences) */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
-                        <span className="text-zinc-355 font-semibold">School Core (Math & Sciences)</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('schoolCore')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-355 font-semibold">School Core (Math &amp; Sciences)</span>
                         <span className="text-zinc-500 font-extrabold">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
                       </div>
                       <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
@@ -2620,11 +2775,15 @@ export default function Home() {
                           className="h-full bg-purple-500 rounded-full transition-all duration-300"
                         />
                       </div>
-                    </div>
+                    </button>
 
                     {/* 3. CSE Major Electives */}
-                    <div>
-                      <div className="flex justify-between text-[11px] mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('electives')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">CSE Major Electives</span>
                         <span className="text-zinc-500 font-extrabold">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
                       </div>
@@ -2634,102 +2793,123 @@ export default function Home() {
                           className="h-full bg-indigo-400 rounded-full transition-all duration-300"
                         />
                       </div>
-                    </div>
+                    </button>
+                  </div>
 
-                    {/* 4. GenEd Streams */}
-                    <div className="pt-2 border-t border-white/5 space-y-2.5">
-                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">GenEd Streams Progress (39 Cr Total)</p>
-                      
-                      {/* Stream 1: Writing */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-zinc-400">GenEd Stream 1 (Writing Comprehension)</span>
-                          <span className="text-zinc-550 font-extrabold">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
-                          <div 
-                            style={{ width: `${(curriculumProgress.stream1Completed / curriculumProgress.stream1Total) * 100}%` }}
-                            className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
-                          />
-                        </div>
+                  {/* 4. GenEd Streams */}
+                  <div className="pt-4 border-t border-zinc-900/60 space-y-3">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">GenEd Streams Progress (39 Cr Total)</p>
+                    
+                    {/* Stream 1: Writing */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('stream1')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-400">GenEd Stream 1 (Writing Comprehension)</span>
+                        <span className="text-zinc-550 font-extrabold">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
                       </div>
+                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.stream1Completed / curriculumProgress.stream1Total) * 100}%` }}
+                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </button>
 
-                      {/* Stream 2: Math/Sci */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-zinc-400">GenEd Stream 2 (Math & Natural Sciences)</span>
-                          <span className="text-zinc-550 font-extrabold">{curriculumProgress.stream2Completed} / {curriculumProgress.stream2Total} Cr</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
-                          <div 
-                            style={{ width: `${(curriculumProgress.stream2Completed / curriculumProgress.stream2Total) * 100}%` }}
-                            className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
-                          />
-                        </div>
+                    {/* Stream 2: Math/Sci */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('stream2')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-400">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
+                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream2Completed} / {curriculumProgress.stream2Total} Cr</span>
                       </div>
+                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.stream2Completed / curriculumProgress.stream2Total) * 100}%` }}
+                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </button>
 
-                      {/* Stream 3: Arts */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-zinc-400">GenEd Stream 3 (Arts & Humanities)</span>
-                          <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream3Completed} / {curriculumProgress.stream3Total} Cr</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
-                          <div 
-                            style={{ width: `${(curriculumProgress.stream3Completed / curriculumProgress.stream3Total) * 100}%` }}
-                            className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
-                          />
-                        </div>
+                    {/* Stream 3: Arts */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('stream3')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-400">GenEd Stream 3 (Arts &amp; Humanities)</span>
+                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream3Completed} / {curriculumProgress.stream3Total} Cr</span>
                       </div>
+                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.stream3Completed / curriculumProgress.stream3Total) * 100}%` }}
+                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </button>
 
-                      {/* Stream 4: Social */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-zinc-400">GenEd Stream 4 (Social Sciences)</span>
-                          <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream4Completed} / {curriculumProgress.stream4Total} Cr</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
-                          <div 
-                            style={{ width: `${(curriculumProgress.stream4Completed / curriculumProgress.stream4Total) * 100}%` }}
-                            className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
-                          />
-                        </div>
+                    {/* Stream 4: Social */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('stream4')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-400">GenEd Stream 4 (Social Sciences)</span>
+                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream4Completed} / {curriculumProgress.stream4Total} Cr</span>
                       </div>
+                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.stream4Completed / curriculumProgress.stream4Total) * 100}%` }}
+                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </button>
 
-                      {/* Stream 5: CST */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-zinc-400">GenEd Stream 5 (Communities / CST)</span>
-                          <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream5Completed} / {curriculumProgress.stream5Total} Cr</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
-                          <div 
-                            style={{ width: `${(curriculumProgress.stream5Completed / curriculumProgress.stream5Total) * 100}%` }}
-                            className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
-                          />
-                        </div>
+                    {/* Stream 5: CST */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('stream5')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-400">GenEd Stream 5 (Communities / CST)</span>
+                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream5Completed} / {curriculumProgress.stream5Total} Cr</span>
                       </div>
+                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.stream5Completed / curriculumProgress.stream5Total) * 100}%` }}
+                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </button>
 
-                      {/* Free GenEd Choice */}
-                      <div>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-zinc-400">GenEd Electives (Free Choice)</span>
-                          <span className="text-zinc-555 font-extrabold">{curriculumProgress.freeGenEdCredits} / {curriculumProgress.freeGenEdTotal} Cr</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
-                          <div 
-                            style={{ width: `${(curriculumProgress.freeGenEdCredits / curriculumProgress.freeGenEdTotal) * 100}%` }}
-                            className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
-                          />
-                        </div>
+                    {/* Free GenEd Choice */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategorySelectorKey('freeGenEd')}
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                    >
+                      <div className="w-full flex justify-between text-[11px]">
+                        <span className="text-zinc-400">GenEd Electives (Free Choice)</span>
+                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.freeGenEdCredits} / {curriculumProgress.freeGenEdTotal} Cr</span>
                       </div>
-                    </div>
+                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                        <div 
+                          style={{ width: `${(curriculumProgress.freeGenEdCredits / curriculumProgress.freeGenEdTotal) * 100}%` }}
+                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                        />
+                      </div>
+                    </button>
                   </div>
                 </div>
-
-                </div>
-              </div>
-            </aside>
+              </aside>
 
           {/* B. RIGHT PANEL: Semester Timeline Card Schedule */}
           <main className="flex-1 lg:overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-6">
@@ -3043,7 +3223,7 @@ export default function Home() {
                                   <option value="">Move To...</option>
                                   {semesters.filter(s => s.id !== sem.id).map(s => {
                                     const destIdx = semesters.findIndex(semItem => semItem.id === s.id);
-                                    const { hp } = getCoursePrereqs(c.code, onboardingData.pathway);
+                                    const { hp } = getCoursePrereqs(c.code, onboardingData.pathway, onboardingData.creditOption);
                                     const missingHp = hp.filter(code => !isCourseCompletedPrior(code, destIdx, semesters, mode));
                                     const isLocked = missingHp.length > 0;
                                     return (
@@ -3162,7 +3342,7 @@ export default function Home() {
               ) : (
                 filteredSearchCourses.map(course => {
                   const targetSemIdx = semesters.findIndex(s => s.id === activeCourseSelectorSemesterId);
-                  const { hp } = getCoursePrereqs(course.code, onboardingData.pathway);
+                  const { hp } = getCoursePrereqs(course.code, onboardingData.pathway, onboardingData.creditOption);
                   const missingHp = hp.filter(code => !isCourseCompletedPrior(code, targetSemIdx, semesters, mode));
                   const isLocked = missingHp.length > 0;
 
@@ -3205,6 +3385,162 @@ export default function Home() {
                   );
                 })
               )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 4.5. Category Course Selector Modal Overlay */}
+      {activeCategorySelectorKey !== null && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0f0f13] border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            
+            {/* Modal Header */}
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                  <BookOpen className="h-4.5 w-4.5 text-indigo-400" />
+                  Add to {categoryDetails.name}
+                </h3>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {categoryDetails.desc}
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setActiveCategorySelectorKey(null);
+                  setSelectedCategoryCourseCode("");
+                  setCategoryCourseSearchQuery("");
+                }} 
+                className="text-zinc-400 hover:text-white p-1 rounded"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Target Semester Selector */}
+            <div className="p-4 bg-zinc-900/30 border-b border-zinc-800 space-y-2">
+              <label className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase">Select Target Semester:</label>
+              <select
+                value={selectedCategoryTargetSemesterId}
+                onChange={(e) => setSelectedCategoryTargetSemesterId(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition cursor-pointer"
+              >
+                {semesters.map((sem, semIdx) => {
+                  const intake = semesterIntakes[semIdx];
+                  const semTermYear = `${sem.term || intake?.term || 'Spring'} ${sem.year || intake?.year || 2025}`;
+                  const semLabel = sem.isRS ? `RS (${semTermYear})` : `${sem.name} (${semTermYear})`;
+                  return (
+                    <option key={sem.id} value={sem.id}>
+                      {semLabel}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Course Search Input */}
+            <div className="p-4 bg-zinc-900/30 border-b border-zinc-800 space-y-2">
+              <label className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase">Select Course to Add:</label>
+              <input
+                type="text"
+                placeholder="Search course by code or title..."
+                value={categoryCourseSearchQuery}
+                onChange={(e) => setCategoryCourseSearchQuery(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition"
+              />
+            </div>
+
+            {/* Filtered Courses List */}
+            <div className="flex-1 overflow-y-auto divide-y divide-zinc-850 p-3 space-y-1 bg-zinc-950/20 custom-scrollbar">
+              {categoryFilteredCourses.length === 0 ? (
+                <div className="py-8 text-center text-zinc-500 text-xs italic">
+                  {categoryCourseSearchQuery.trim() !== "" 
+                    ? "No matching courses found."
+                    : "All courses in this category have already been planned or completed!"}
+                </div>
+              ) : (
+                categoryFilteredCourses.map(course => {
+                  const targetSemIdx = semesters.findIndex(s => s.id === selectedCategoryTargetSemesterId);
+                  const { hp } = getCoursePrereqs(course.code, onboardingData.pathway, onboardingData.creditOption);
+                  const missingHp = hp.filter(code => !isCourseCompletedPrior(code, targetSemIdx, semesters, mode));
+                  const isLocked = missingHp.length > 0;
+                  const isSelected = selectedCategoryCourseCode === course.code;
+
+                  const compState = getCompletedCourseState(course.code);
+                  const isCompleted = compState.isCompleted;
+
+                  return (
+                    <button
+                      key={course.code}
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => setSelectedCategoryCourseCode(course.code)}
+                      className={`w-full p-3 text-left hover:bg-zinc-900/60 rounded-xl border transition flex items-center justify-between text-xs group ${
+                        isLocked 
+                          ? 'opacity-40 cursor-not-allowed border-transparent' 
+                          : isSelected
+                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300'
+                            : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-extrabold text-sm tracking-tight transition ${isSelected ? 'text-indigo-400' : 'text-white'}`}>
+                            {course.code}
+                          </span>
+                          <span className="text-[9px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded font-mono text-zinc-500">
+                            {course.credits} Credits
+                          </span>
+                          {renderMandatoryBadge(course.code)}
+                          {isCompleted && (
+                            <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                              Completed {compState.grade && `(${compState.grade})`}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-zinc-550 text-[10px] mt-0.5">{course.title}</p>
+                        {isLocked && (
+                          <div className="flex items-center gap-1 mt-1 text-[9px] text-rose-400 font-semibold">
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            <span>Cannot Add: Missing Hard Prerequisite ({missingHp.join(", ")})</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-right pl-4">
+                        <span className="text-[9px] text-zinc-600 font-semibold uppercase tracking-wider block">
+                          {course.category}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-4 border-t border-zinc-800 flex gap-3 bg-zinc-900/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCategorySelectorKey(null);
+                  setSelectedCategoryCourseCode("");
+                  setCategoryCourseSearchQuery("");
+                }}
+                className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!selectedCategoryCourseCode}
+                onClick={handleAddCategoryCourse}
+                className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg transition cursor-pointer"
+              >
+                Add Course
+              </button>
             </div>
 
           </div>
@@ -3504,6 +3840,405 @@ export default function Home() {
               >
                 Close Preview
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Recommended Curriculum Roadmap Modal Overlay */}
+      {showRoadmapModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-indigo-500/30 rounded-3xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl">
+            {/* Ambient glows inside modal */}
+            <div className="absolute top-[-10%] left-[-10%] w-[30%] h-[30%] rounded-full bg-indigo-500/10 blur-[80px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] rounded-full bg-purple-500/10 blur-[80px] pointer-events-none" />
+            
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-zinc-800/85 flex items-center justify-between relative z-10 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-lg border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                  <HelpCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Recommended Courses for CSE Curriculum</h3>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">FYAT Recommended Course Roadmap Chart</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowRoadmapModal(false)}
+                className="h-8 w-8 rounded-lg bg-zinc-900 border border-white/5 hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            {/* Scrollable Modal Content */}
+            <div className="flex-grow overflow-auto p-6 relative z-10 custom-scrollbar">
+              <div className="min-w-[950px] space-y-6">
+                
+                {/* Stats Summary Header - CSE Curriculum */}
+                <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">CSE Curriculum (136 Credits)</span>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-semibold">132 Academic + 4 Non-Academic Credits</span>
+                  </div>
+                  <div className="grid grid-cols-7 gap-2 text-center">
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                      <p className="text-[10px] text-zinc-500 uppercase">BIL</p>
+                      <p className="text-xs font-bold text-white mt-1">2 Courses</p>
+                    </div>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                      <p className="text-[10px] text-zinc-500 uppercase">TARC (RS)</p>
+                      <p className="text-xs font-bold text-white mt-1">3 Courses</p>
+                    </div>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                      <p className="text-[10px] text-zinc-500 uppercase">MNS</p>
+                      <p className="text-xs font-bold text-white mt-1">7 Courses</p>
+                    </div>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                      <p className="text-[10px] text-zinc-500 uppercase">COD (GenEd)</p>
+                      <p className="text-xs font-bold text-white mt-1">5 Courses</p>
+                    </div>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                      <p className="text-[10px] text-zinc-500 uppercase">Dept Core</p>
+                      <p className="text-xs font-bold text-white mt-1">25 + 2 Elec</p>
+                    </div>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-emerald-500/20">
+                      <p className="text-[10px] text-emerald-500/80 uppercase leading-tight">Thesis / Internship / Final Project</p>
+                      <p className="text-xs font-bold text-emerald-300 mt-1">1 Course</p>
+                    </div>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
+                      <p className="text-[10px] text-zinc-500 uppercase">Total Courses</p>
+                      <p className="text-xs font-bold text-white mt-1">45</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Split Table Layout */}
+                <div className="flex gap-0 items-stretch rounded-2xl overflow-hidden border border-zinc-700/50 bg-zinc-900/60 shadow-lg">
+
+                  {/* ═══════════════════════════════════════════════
+                      LEFT SECTION: COURSE OUTSIDE DEPARTMENT
+                  ═══════════════════════════════════════════════ */}
+                  <div className="w-[42%] shrink-0 flex flex-col">
+
+                    {/* Section Header Band */}
+                    <div className="px-4 py-2.5 bg-indigo-950/60 border-b-2 border-indigo-600/40 border-r border-zinc-700/50">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-px flex-1 bg-indigo-600/30" />
+                        <h4 className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-[0.15em] whitespace-nowrap">
+                          Course Outside Department
+                        </h4>
+                        <div className="h-px flex-1 bg-indigo-600/30" />
+                      </div>
+                    </div>
+
+                    <div className="p-3 space-y-2.5 border-r border-zinc-700/50 flex-1">
+
+                      {/* BIL Section */}
+                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
+                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                          BIL — Brac Institute of Languages
+                        </div>
+                        <table className="w-full text-left text-xs border-collapse">
+                          <tbody>
+                            <tr className="border-b border-zinc-900/60 bg-amber-500/10">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">ENG091</td>
+                              <td className="p-1.5 text-amber-200/80 text-[11px]">Foundation Course in English <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">ENG101</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">English Fundamentals</td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">ENG102</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Composition I</td>
+                            </tr>
+                            <tr>
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">ENG103</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Advanced Writing Skills and Presentation</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* MNS I Section */}
+                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
+                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                          MNS I — Math &amp; Natural Sciences
+                        </div>
+                        <table className="w-full text-left text-xs border-collapse">
+                          <tbody>
+                            <tr className="border-b border-zinc-900/60 bg-amber-500/10">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">MAT092</td>
+                              <td className="p-1.5 text-amber-200/80 text-[11px]">Basic Course in Mathematics II <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT110</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH I: Differential Calculus &amp; Coordinate Geometry</td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">PHY111</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Principles of Physics I</td>
+                            </tr>
+                            <tr>
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">STA201</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Elements of Statistics and Probabilities</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* TARC Section */}
+                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
+                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                          TARC — Residential Semester (RS)
+                        </div>
+                        <table className="w-full text-left text-xs border-collapse">
+                          <tbody>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">HUM103</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Ethics and Culture</td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">BNG103</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Bangla Language and Literature</td>
+                            </tr>
+                            <tr>
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">EMB101</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Emergence of Bangladesh</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* MNS II Section */}
+                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
+                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                          MNS II — Additional Math &amp; Sciences
+                        </div>
+                        <table className="w-full text-left text-xs border-collapse">
+                          <tbody>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT120</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH II: Integral Calculus &amp; Differential Equations</td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT215</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH III: Complex Variables &amp; Laplace Transformations</td>
+                            </tr>
+                            <tr className="border-b border-zinc-900/60">
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT216</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH IV: Linear Algebra &amp; Fourier Analysis</td>
+                            </tr>
+                            <tr>
+                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">PHY112</td>
+                              <td className="p-1.5 text-zinc-400 text-[11px]">Principles of Physics II</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* COD — GenEd Streams */}
+                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
+                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                          COD — GenEd Electives (5 courses needed)
+                        </div>
+                        <div className="divide-y divide-zinc-900/60">
+                          {/* Stream 2 */}
+                          <div className="px-2.5 py-1.5">
+                            <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider mb-1">Stream 2 — Math &amp; Natural Sciences</p>
+                            <div className="flex flex-wrap gap-1">
+                              {["BIO101","CHE101","ENV103","GSC110","MAT101","PHY101","STA101"].map(c => (
+                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-purple-500/20 text-purple-200/80 px-1.5 py-0.5 rounded">{c}</span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Stream 3 */}
+                          <div className="px-2.5 py-1.5">
+                            <p className="text-[9px] font-bold text-sky-400 uppercase tracking-wider mb-1">Stream 3 — Arts &amp; Humanities</p>
+                            <div className="flex flex-wrap gap-1">
+                              {["ENG110","ENG113","ENG114","ENG115","ENG333","HST102","HST103","HST104","HUM101","HUM102","HUM207","HUM210","HUM301"].map(c => (
+                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-sky-500/20 text-sky-200/80 px-1.5 py-0.5 rounded">{c}</span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Stream 4 */}
+                          <div className="px-2.5 py-1.5">
+                            <p className="text-[9px] font-bold text-teal-400 uppercase tracking-wider mb-1">Stream 4 — Social Sciences</p>
+                            <div className="flex flex-wrap gap-1">
+                              {["ANT101","ANT342","ANT351","BUS102","BUS201","BUS333","BUS335","BU201","DEV104","DEV201","ECO101","ECO102","ECO105","POL101","POL102","POL103","POL201","POL202","POL203","POL210","PSY101","PSY102","SOC101","SOC201"].map(c => (
+                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-teal-500/20 text-teal-200/80 px-1.5 py-0.5 rounded">{c}</span>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Stream 5 */}
+                          <div className="px-2.5 py-1.5">
+                            <p className="text-[9px] font-bold text-rose-400 uppercase tracking-wider mb-1">Stream 5 — Communities (CST)</p>
+                            <div className="flex flex-wrap gap-1">
+                              {["BUS334","CST201","CST204","CST301","CST302","CST303","CST304","CST305","CST306","CST307","CST308","CST309","CST310","CST314","CST333"].map(c => (
+                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-rose-500/20 text-rose-200/80 px-1.5 py-0.5 rounded">{c}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* ═══ Vertical Section Divider ═══ */}
+                  <div className="w-[3px] self-stretch bg-gradient-to-b from-indigo-600/0 via-zinc-600/60 to-indigo-600/0 shrink-0" />
+
+                  {/* ═══════════════════════════════════════════════
+                      RIGHT SECTION: DEPARTMENT CORE
+                  ═══════════════════════════════════════════════ */}
+                  <div className="flex-1 flex flex-col">
+
+                    {/* Section Header Band */}
+                    <div className="px-4 py-2.5 bg-emerald-950/40 border-b-2 border-emerald-600/40">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-px flex-1 bg-emerald-600/30" />
+                        <h4 className="text-[10px] font-extrabold text-emerald-300 uppercase tracking-[0.15em] whitespace-nowrap">
+                          Department Core
+                        </h4>
+                        <div className="h-px flex-1 bg-emerald-600/30" />
+                      </div>
+                    </div>
+
+                    <div className="p-3">
+                      <div className="border border-white/5 rounded-xl overflow-hidden bg-zinc-950/40">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b-2 border-zinc-800/80 text-[10px] uppercase font-bold">
+                              <th colSpan={2} className="p-1.5 border-r-2 border-zinc-700/60 text-center bg-emerald-950/50 text-emerald-400 tracking-wider">
+                                Program Core (25 Courses)
+                              </th>
+                              <th colSpan={2} className="p-1.5 text-center bg-amber-950/40 text-amber-400 tracking-wider">
+                                CSE Electives (24 Courses)
+                              </th>
+                            </tr>
+                            <tr className="border-b border-zinc-800/60 text-[9px] uppercase font-semibold">
+                              <th className="p-1.5 border-r border-zinc-900/60 w-[13%] text-center bg-emerald-950/30 text-emerald-500">Code</th>
+                              <th className="p-1.5 border-r-2 border-zinc-700/60 bg-emerald-950/30 text-emerald-500">Course Name</th>
+                              <th className="p-1.5 border-r border-zinc-900/60 w-[13%] text-center bg-amber-950/30 text-amber-500">Code</th>
+                              <th className="p-1.5 bg-amber-950/30 text-amber-500">Course Name</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { c1: "CSE110", n1: "Programming Language I",             c2: "CSE101", n2: "Introduction to Computer Science" },
+                              { c1: "CSE111", n1: "Programming Language II",            c2: "CSE310", n2: "Object-Oriented Programming" },
+                              { c1: "CSE220", n1: "Data Structures",                    c2: "CSE342", n2: "Computer Systems Engineering" },
+                              { c1: "CSE221", n1: "Algorithms",                         c2: "CSE371", n2: "Management Information Systems" },
+                              { c1: "CSE230", n1: "Discrete Mathematics",               c2: "CSE390", n2: "Technical Communication" },
+                              { c1: "CSE250", n1: "Circuits and Electronics",           c2: "CSE391", n2: "Programming for the Internet" },
+                              { c1: "CSE251", n1: "Electronic Devices and Circuits",    c2: "CSE392", n2: "Signals and Systems" },
+                              { c1: "CSE260", n1: "Digital Logic Design",               c2: "CSE410", n2: "Advance Programming In UNIX" },
+                              { c1: "CSE320", n1: "Data Communications",                c2: "CSE419", n2: "Programming Languages and Competitive Programming" },
+                              { c1: "CSE321", n1: "Operating Systems",                  c2: "CSE424", n2: "Pattern Recognition" },
+                              { c1: "CSE330", n1: "Numerical Methods",                  c2: "CSE425", n2: "Neural Networks" },
+                              { c1: "CSE331", n1: "Automata and Computability",         c2: "CSE426", n2: "Advanced Algorithms" },
+                              { c1: "CSE340", n1: "Computer Architecture",              c2: "CSE427", n2: "Machine Learning" },
+                              { c1: "CSE341", n1: "Microprocessors",                    c2: "CSE428", n2: "Image Processing" },
+                              { c1: "CSE350", n1: "Digital Electronics and Pulse Techniques", c2: "CSE429", n2: "Basic Multimedia Theory" },
+                              { c1: "CSE360", n1: "Computer Interfacing",               c2: "CSE430", n2: "Digital Signal Processing" },
+                              { c1: "CSE370", n1: "Database Systems",                   c2: "CSE431", n2: "Natural Language Processing" },
+                              { c1: "CSE420", n1: "Compiler Design",                    c2: "CSE432", n2: "Speech Recognition and Synthesis" },
+                              { c1: "CSE421", n1: "Computer Networks",                  c2: "CSE462", n2: "Fault-Tolerant Systems" },
+                              { c1: "CSE422", n1: "Artificial Intelligence",            c2: "CSE472", n2: "Human-Computer Interface" },
+                              { c1: "CSE423", n1: "Computer Graphics",                  c2: "CSE473", n2: "Financial Engineering & Technology" },
+                              { c1: "CSE460", n1: "VLSI Design",                        c2: "CSE474", n2: "Simulation and Modeling" },
+                              { c1: "CSE461", n1: "Introduction to Robotics",           c2: "CSE490", n2: "WAN Routing / Special Topics" },
+                              { c1: "CSE470", n1: "Software Engineering",               c2: "CSE491", n2: "Independent Study" },
+                              { c1: "CSE471", n1: "Systems Analysis and Design",        c2: "",       n2: "" },
+                              { c1: "CSE400", n1: "Thesis / Internship / Final Project (4 Cr)", c2: "",       n2: "" },
+                            ].map((row, index) => {
+                              const programCore = [
+                                "CSE110","CSE111","CSE220","CSE221","CSE230","CSE250","CSE251","CSE260",
+                                "CSE320","CSE321","CSE330","CSE331","CSE340","CSE341","CSE350","CSE360",
+                                "CSE370","CSE420","CSE421","CSE422","CSE423","CSE460","CSE461","CSE470",
+                                "CSE471","CSE400"
+                              ];
+                              const electives = [
+                                "CSE101","CSE310","CSE342","CSE371","CSE390","CSE391","CSE392","CSE410",
+                                "CSE419","CSE424","CSE425","CSE426","CSE427","CSE428","CSE429","CSE430",
+                                "CSE431","CSE432","CSE462","CSE472","CSE473","CSE474","CSE490","CSE491"
+                              ];
+                              const isCore1 = programCore.includes(row.c1);
+                              const isElect2 = electives.includes(row.c2);
+                              return (
+                                <tr key={index} className="border-b border-zinc-900/60 last:border-0">
+                                  <td className={`p-1.5 border-r border-zinc-900/60 font-mono font-bold text-center text-[11px] ${isCore1 ? 'bg-emerald-950/40 text-emerald-300' : 'text-zinc-300'}`}>
+                                    {row.c1 || ""}
+                                  </td>
+                                  <td className={`p-1.5 border-r-2 border-zinc-700/60 text-[11px] ${isCore1 ? 'bg-emerald-950/20 text-emerald-100/90' : 'text-zinc-400'}`}>
+                                    {row.n1}
+                                  </td>
+                                  <td className={`p-1.5 border-r border-zinc-900/60 font-mono font-bold text-center text-[11px] ${isElect2 ? 'bg-amber-950/40 text-amber-300' : 'text-zinc-500'}`}>
+                                    {row.c2 || ""}
+                                  </td>
+                                  <td className={`p-1.5 text-[11px] ${isElect2 ? 'bg-amber-950/20 text-amber-100/90' : 'text-zinc-600'}`}>
+                                    {row.n2}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* GenEd Help Link Section */}
+                <div className="bg-zinc-900/40 border border-indigo-500/20 rounded-2xl p-4 flex items-center justify-between mt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
+                    <p className="text-xs text-slate-300 font-medium">
+                      Need more help understanding the GenEd streams?
+                    </p>
+                  </div>
+                  <a
+                    href="https://www.bracu.ac.bd/avilable-program/general-education-gened"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-98 cursor-pointer"
+                  >
+                    <span>View the Official BRACU GenEd Guidelines</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[10px] text-zinc-550 shrink-0 relative z-10">
+              <span className="font-bold uppercase tracking-wider text-indigo-400/80">
+                Guideline for CSE Curriculum
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Green = Program Core
+                </span>
+                <span className="font-semibold text-amber-400 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  Amber = CSE Electives
+                </span>
+              </span>
+              <span className="text-zinc-400 text-right max-w-xs">
+                Created By <strong className="text-zinc-300">Badhon Nandi</strong>, MENTOR (FYAT)<br />
+                Office of Academic Advising(OAA), Brac University
+              </span>
             </div>
 
           </div>

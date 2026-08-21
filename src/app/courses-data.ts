@@ -20,7 +20,7 @@ export const COURSES: Course[] = [
   // GenEd Stream 2
   { code: "BIO101", title: "Introduction to Biology", credits: 3, category: "GenEd Stream 2", mandatory: false },
   { code: "CHE101", title: "Introduction to Chemistry", credits: 3, category: "GenEd Stream 2", mandatory: false },
-  { code: "CSE101", title: "Introduction to Computer Science", credits: 3, category: "GenEd Stream 2", mandatory: false },
+  { code: "CSE101", title: "Introduction to Computer Science", credits: 3, category: "CSE Major Elective", mandatory: false },
   { code: "ENV103", title: "Elements of Environmental Science", credits: 3, category: "GenEd Stream 2", mandatory: false },
   { code: "MAT101", title: "Fundamentals of Mathematics", credits: 3, category: "GenEd Stream 2", mandatory: false },
   { code: "PHY101", title: "Introduction to Physics", credits: 3, category: "GenEd Stream 2", mandatory: false },
