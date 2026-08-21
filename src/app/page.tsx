@@ -190,6 +190,8 @@ export default function Home() {
   }, [activeCategorySelectorKey, semesters]);
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState<boolean>(false);
+  const [showDataDropdown, setShowDataDropdown] = useState<boolean>(false);
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
   const [targetCgpa, setTargetCgpa] = useState<string>("3.50");
   const [roiExpanded, setRoiExpanded] = useState<boolean>(false);
@@ -577,14 +579,14 @@ export default function Home() {
       // Micro-delay to let DOM state settle
       await new Promise(res => setTimeout(res, 50));
 
-      const parent = node.parentElement;
-      const originalScrollTop = parent ? parent.scrollTop : 0;
-      const originalScrollLeft = parent ? parent.scrollLeft : 0;
+      const scrollParent = (node.closest(".overflow-y-auto") || node.parentElement) as HTMLElement;
+      const originalScrollTop = scrollParent ? scrollParent.scrollTop : 0;
+      const originalScrollLeft = scrollParent ? scrollParent.scrollLeft : 0;
 
       // Temporarily scroll parent container to top to prevent html-to-image cropping bug
-      if (parent) {
-        parent.scrollTop = 0;
-        parent.scrollLeft = 0;
+      if (scrollParent) {
+        scrollParent.scrollTop = 0;
+        scrollParent.scrollLeft = 0;
       }
 
       const width = node.offsetWidth || 750;
@@ -607,9 +609,9 @@ export default function Home() {
         }
       } as any).then((blob) => {
         // Restore parent scroll positions immediately after canvas paint completes
-        if (parent) {
-          parent.scrollTop = originalScrollTop;
-          parent.scrollLeft = originalScrollLeft;
+        if (scrollParent) {
+          scrollParent.scrollTop = originalScrollTop;
+          scrollParent.scrollLeft = originalScrollLeft;
         }
 
         if (!blob) {
@@ -629,9 +631,9 @@ export default function Home() {
         setIsGeneratingSnapshot(false);
       }).catch((err) => {
         // Guarantee parent scroll state recovery in error path
-        if (parent) {
-          parent.scrollTop = originalScrollTop;
-          parent.scrollLeft = originalScrollLeft;
+        if (scrollParent) {
+          scrollParent.scrollTop = originalScrollTop;
+          scrollParent.scrollLeft = originalScrollLeft;
         }
         console.error('Image export failed:', err);
         setIsGeneratingSnapshot(false);
@@ -1540,6 +1542,26 @@ export default function Home() {
     updateSemesters(updated);
   };
 
+  const handleToggleSemesterAllCompleted = (semId: string) => {
+    const sem = semesters.find(s => s.id === semId);
+    if (!sem) return;
+    const allCompleted = sem.courses.every(c => c.isCompleted);
+    const updated = semesters.map(s => {
+      if (s.id === semId) {
+        return {
+          ...s,
+          courses: s.courses.map(c => ({
+            ...c,
+            isCompleted: !allCompleted,
+            grade: allCompleted ? "" : (c.grade || "")
+          }))
+        };
+      }
+      return s;
+    });
+    updateSemesters(updated);
+  };
+
   const handleCompletionToggle = (semId: string, courseCode: string, isCompleted: boolean) => {
     const updated = semesters.map(sem => {
       if (sem.id === semId) {
@@ -1791,83 +1813,169 @@ export default function Home() {
                 
                 {thesisTrack === 'thesis' && (
                   <div className="space-y-3 bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
-                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={thesisSteps.step1}
-                        onChange={(e) => {
-                          const updatedSteps = { ...thesisSteps, step1: e.target.checked };
+                    <div className="flex items-center gap-3 text-xs text-slate-100 select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedSteps = { ...thesisSteps, step1: !thesisSteps.step1 };
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className="h-4 w-4 accent-purple-500 rounded border-slate-800"
-                      />
-                      <span>Step 1: Thesis Topic & Advisor Approved</span>
-                    </label>
-                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={thesisSteps.step2}
-                        onChange={(e) => {
-                          const updatedSteps = { ...thesisSteps, step2: e.target.checked };
+                        className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                          thesisSteps.step1
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                        }`}
+                      >
+                        {thesisSteps.step1 && (
+                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </button>
+                      <span
+                        onClick={() => {
+                          const updatedSteps = { ...thesisSteps, step1: !thesisSteps.step1 };
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className="h-4 w-4 accent-purple-500 rounded border-slate-800"
-                      />
-                      <span>Step 2: Mid-term defense cleared</span>
-                    </label>
-                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={thesisSteps.step3}
-                        onChange={(e) => handleThesisStep3Toggle(e.target.checked)}
-                        className="h-4 w-4 accent-purple-500 rounded border-slate-800"
-                      />
-                      <span className="font-semibold text-slate-100">Step 3: Final defense report defended & approved</span>
-                    </label>
+                        className="cursor-pointer hover:text-white transition-colors"
+                      >
+                        Step 1: Thesis Topic & Advisor Approved
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-100 select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedSteps = { ...thesisSteps, step2: !thesisSteps.step2 };
+                          setThesisSteps(updatedSteps);
+                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
+                        }}
+                        className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                          thesisSteps.step2
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                        }`}
+                      >
+                        {thesisSteps.step2 && (
+                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </button>
+                      <span
+                        onClick={() => {
+                          const updatedSteps = { ...thesisSteps, step2: !thesisSteps.step2 };
+                          setThesisSteps(updatedSteps);
+                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
+                        }}
+                        className="cursor-pointer hover:text-white transition-colors"
+                      >
+                        Step 2: Mid-term defense cleared
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-100 select-none">
+                      <button
+                        type="button"
+                        onClick={() => handleThesisStep3Toggle(!thesisSteps.step3)}
+                        className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                          thesisSteps.step3
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                        }`}
+                      >
+                        {thesisSteps.step3 && (
+                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </button>
+                      <span
+                        onClick={() => handleThesisStep3Toggle(!thesisSteps.step3)}
+                        className="font-semibold text-slate-100 cursor-pointer hover:text-white transition-colors"
+                      >
+                        Step 3: Final defense report defended & approved
+                      </span>
+                    </div>
                   </div>
                 )}
 
                 {thesisTrack === 'project' && (
                   <div className="bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
-                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={projectCompleted}
-                        onChange={(e) => {
-                          setProjectCompleted(e.target.checked);
-                          handleCSE400CompletionToggle(e.target.checked);
-                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, e.target.checked, internshipCompleted, onboardingData);
+                    <div className="flex items-start gap-3 text-xs text-slate-100 select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !projectCompleted;
+                          setProjectCompleted(nextVal);
+                          handleCSE400CompletionToggle(nextVal);
+                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, nextVal, internshipCompleted, onboardingData);
                         }}
-                        className="h-4.5 w-4.5 accent-purple-500 rounded border-slate-800"
-                      />
-                      <div>
-                        <p className="font-semibold text-slate-100">Final Project Built & Defended</p>
+                        className={`h-4.5 w-4.5 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
+                          projectCompleted
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                        }`}
+                      >
+                        {projectCompleted && (
+                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </button>
+                      <div
+                        onClick={() => {
+                          const nextVal = !projectCompleted;
+                          setProjectCompleted(nextVal);
+                          handleCSE400CompletionToggle(nextVal);
+                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, nextVal, internshipCompleted, onboardingData);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <p className="font-semibold text-slate-100 hover:text-white transition-colors">Final Project Built & Defended</p>
                         <p className="text-[10px] text-zinc-555 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
                       </div>
-                    </label>
+                    </div>
                   </div>
                 )}
 
                 {thesisTrack === 'internship' && (
                   <div className="bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
-                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={internshipCompleted}
-                        onChange={(e) => {
-                          setInternshipCompleted(e.target.checked);
-                          handleCSE400CompletionToggle(e.target.checked);
-                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, projectCompleted, e.target.checked, onboardingData);
+                    <div className="flex items-start gap-3 text-xs text-slate-100 select-none">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !internshipCompleted;
+                          setInternshipCompleted(nextVal);
+                          handleCSE400CompletionToggle(nextVal);
+                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, projectCompleted, nextVal, onboardingData);
                         }}
-                        className="h-4.5 w-4.5 accent-purple-500 rounded border-slate-800"
-                      />
-                      <div>
-                        <p className="font-semibold text-slate-100">Internship Completed & Report Submitted</p>
+                        className={`h-4.5 w-4.5 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
+                          internshipCompleted
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                        }`}
+                      >
+                        {internshipCompleted && (
+                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                        )}
+                      </button>
+                      <div
+                        onClick={() => {
+                          const nextVal = !internshipCompleted;
+                          setInternshipCompleted(nextVal);
+                          handleCSE400CompletionToggle(nextVal);
+                          saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, projectCompleted, nextVal, onboardingData);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <p className="font-semibold text-slate-100 hover:text-white transition-colors">Internship Completed & Report Submitted</p>
                         <p className="text-[10px] text-zinc-555 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
                       </div>
-                    </label>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2073,33 +2181,33 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col">
-      {/* 1. Header Navigation */}
-      <header className="border-b border-slate-800/80 bg-[#050507]/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl shadow-black/30">
-        <div 
-          onClick={() => setShowDashboard(false)}
-          className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
-          title="Back to Landing Page"
-        >
-          <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-            <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-            </svg>
+      <header className="border-b border-slate-800/80 bg-[#050507]/90 backdrop-blur-md sticky top-0 z-40 px-4 sm:px-6 py-4 shadow-2xl shadow-black/30 w-full relative">
+        {/* Desktop Header Layout (Screens >= 1024px) */}
+        <div className="hidden lg:flex w-full max-w-7xl mx-auto items-center justify-between relative min-h-[48px]">
+          {/* Left: Logo */}
+          <div 
+            onClick={() => setShowDashboard(false)}
+            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all relative z-20 shrink-0"
+            title="Back to Landing Page"
+          >
+            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                Flow136
+              </h1>
+              <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-              Flow136
-            </h1>
-            <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
-          </div>
-        </div>
 
-        {/* Action controls */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Mode Switcher */}
-          <div className="flex bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl">
+          {/* Center: Mode Toggler (Dead Center) */}
+          <div className="absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex">
             <button
               onClick={() => mode !== 'tracker' && handleModeToggle()}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'tracker' 
                   ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
                   : 'text-slate-400 hover:text-slate-100'
@@ -2109,7 +2217,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => mode !== 'gpa' && handleModeToggle()}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'gpa' 
                   ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
                   : 'text-slate-400 hover:text-slate-100'
@@ -2119,54 +2227,212 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Backup Action buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportBackup}
-              title="Download backup plan"
-              className="flex items-center gap-1.5 bg-zinc-950/40 hover:bg-zinc-900/60 border border-slate-800/40 text-slate-100 text-xs px-3 py-2 rounded-xl transition"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>Backup</span>
-            </button>
-            
-            <label className="flex items-center gap-1.5 bg-zinc-950/40 hover:bg-zinc-900/60 border border-slate-800/40 text-slate-100 text-xs px-3 py-2 rounded-xl cursor-pointer transition">
-              <Upload className="h-3.5 w-3.5" />
-              <span>Restore</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportBackup}
-                className="hidden"
-              />
-            </label>
-
+          {/* Right Action Group: Feeling Lost, Hamburger dropdown, Reset */}
+          <div className="flex items-center gap-3 relative z-20">
+            {/* 1. Feeling lost? */}
             <button
               onClick={() => setShowRoadmapModal(true)}
-              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-sm"
               title="View recommended CSE/CS curriculum roadmap"
             >
               <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
               <span>Feeling lost?</span>
             </button>
 
-            <button
-              onClick={() => setShowGradeSheetModal(true)}
-              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-slate-100 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
-              title="Open official progress grade sheet preview modal"
-            >
-              <FileText className="h-3.5 w-3.5 text-indigo-400" />
-              <span>Snapshot Progress</span>
-            </button>
- 
+            {/* 2. Hamburger Dropdown Menu */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowDataDropdown(!showDataDropdown);
+                  setShowHeaderMenu(false);
+                }}
+                className={`h-8.5 w-8.5 rounded-xl border flex items-center justify-center transition-all text-xs font-semibold cursor-pointer ${
+                  showDataDropdown 
+                    ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
+                    : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
+                }`}
+                title="Menu"
+              >
+                <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                </svg>
+              </button>
+
+              {showDataDropdown && (
+                <div className="absolute right-0 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
+                  <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 mb-1">
+                    Menu Options
+                  </div>
+                  <button
+                    onClick={() => {
+                      handleExportBackup();
+                      setShowDataDropdown(false);
+                    }}
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                  >
+                    <Download className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Backup</span>
+                  </button>
+                  <label className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 cursor-pointer transition">
+                    <Upload className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Restore</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        handleImportBackup(e);
+                        setShowDataDropdown(false);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={() => {
+                      setShowGradeSheetModal(true);
+                      setShowDataDropdown(false);
+                    }}
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition border-t border-slate-800/40 mt-1 pt-2"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Snapshot Progress</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Reset Button */}
             <button
               onClick={() => setShowResetConfirm(true)}
               title="Reset tracker to onboarding defaults"
-              className="bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/20 text-rose-400 p-2 rounded-xl transition"
+              className="bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/20 text-rose-400 p-2.5 rounded-xl transition cursor-pointer"
             >
-              <RotateCcw className="h-4.5 w-4.5" />
+              <RotateCcw className="h-4 w-4" />
             </button>
           </div>
+        </div>
+
+        {/* Mobile Header Layout (Screens < 1024px - Vertically Stacked & Center-Aligned) */}
+        <div className="flex lg:hidden flex-col items-center text-center gap-4 w-full">
+          {/* 1. Logo and Catchphrase */}
+          <div 
+            onClick={() => setShowDashboard(false)}
+            className="flex flex-col items-center gap-1.5 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
+            title="Back to Landing Page"
+          >
+            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+              </svg>
+            </div>
+            <div className="flex flex-col items-center">
+              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+                Flow136
+              </h1>
+              <p className="text-[10px] text-purple-400 font-semibold tracking-wide mt-0.5">Your curriculum, minus the complexity.</p>
+            </div>
+          </div>
+
+          {/* 2. Mode Toggler */}
+          <div className="bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex w-full max-w-[320px] justify-between">
+            <button
+              onClick={() => mode !== 'tracker' && handleModeToggle()}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
+                mode === 'tracker' 
+                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  : 'text-slate-400 hover:text-slate-100'
+              }`}
+            >
+              Course Tracker Only
+            </button>
+            <button
+              onClick={() => mode !== 'gpa' && handleModeToggle()}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
+                mode === 'gpa' 
+                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  : 'text-slate-400 hover:text-slate-100'
+              }`}
+            >
+              Course + CGPA Planner
+            </button>
+          </div>
+
+          {/* 3. Feeling lost? button */}
+          <button
+            onClick={() => setShowRoadmapModal(true)}
+            className="w-full max-w-[240px] inline-flex items-center justify-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white text-xs font-semibold py-2.5 rounded-xl transition-all cursor-pointer shadow-sm"
+          >
+            <HelpCircle className="h-4 w-4 text-indigo-400" />
+            <span>Feeling lost?</span>
+          </button>
+
+          {/* 4. Hamburger Menu */}
+          <div className="relative w-full max-w-[240px]">
+            <button
+              onClick={() => {
+                setShowHeaderMenu(!showHeaderMenu);
+                setShowDataDropdown(false);
+              }}
+              className={`w-full py-2.5 rounded-xl border flex items-center justify-center gap-2 transition-all text-xs font-semibold cursor-pointer ${
+                showHeaderMenu 
+                  ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
+                  : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
+              }`}
+            >
+              <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+
+            {showHeaderMenu && (
+              <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
+                <div className="px-2.5 py-1 text-[9px] font-bold text-slate-400 tracking-wider uppercase border-b border-slate-800/60 mb-1">
+                  Menu Options
+                </div>
+                <button
+                  onClick={() => {
+                    handleExportBackup();
+                    setShowHeaderMenu(false);
+                  }}
+                  className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                >
+                  <Download className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Backup</span>
+                </button>
+                <label className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 cursor-pointer transition">
+                  <Upload className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Restore</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => {
+                      handleImportBackup(e);
+                      setShowHeaderMenu(false);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  onClick={() => {
+                    setShowGradeSheetModal(true);
+                    setShowHeaderMenu(false);
+                  }}
+                  className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition border-t border-slate-800/40 mt-1 pt-2"
+                >
+                  <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Snapshot Progress</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 5. Reset button */}
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="w-full max-w-[240px] py-2.5 bg-rose-950/10 hover:bg-rose-950/20 border border-rose-900/20 text-rose-400 text-xs font-bold flex items-center justify-center gap-2 rounded-xl transition cursor-pointer"
+          >
+            <RotateCcw className="h-4 w-4 text-rose-400" />
+            <span>Reset Tracker Defaults</span>
+          </button>
         </div>
       </header>
 
@@ -2206,29 +2472,50 @@ export default function Home() {
         </div>
       )}
 
-      {/* 3. Main Dashboard Layout */}
-      {!isOnboarded ? (
+      {/* 3. Main Dashboard Layout */}      {!isOnboarded ? (
         /* Onboarding Wizard Modal overlay if not onboarded */
-        <div className="flex-1 flex items-center justify-center p-6 pb-20 bg-gradient-to-br from-[#030303] via-[#08080a] to-[#0d0d12] overflow-y-auto">
-          <div className="w-full max-w-2xl bg-zinc-950/75 border border-slate-800 rounded-xl shadow-2xl transition-all backdrop-blur-md overflow-hidden p-0 pb-16 mb-16">
-            <div className="w-full max-h-[85vh] overflow-y-auto p-8 pr-6 custom-scrollbar">
-            {/* Step Indicators */}
-            <div className="flex items-center gap-2 mb-8">
-              {[1, 2, 3].map(s => (
-                <div
-                  key={s}
-                  className={`h-1.5 flex-1 rounded-full ${
-                    s <= wizardStep 
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-600' 
-                      : 'bg-zinc-800'
-                  }`}
-                />
-              ))}
+        <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12]">
+          <div className="w-full max-w-xl mx-auto bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl relative overflow-hidden p-6 space-y-6">
+            
+            {/* Ambient glows inside card */}
+            <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] rounded-full bg-indigo-500/5 blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-[-20%] right-[-20%] w-[50%] h-[50%] rounded-full bg-purple-500/5 blur-[100px] pointer-events-none" />
+
+            {/* Header & Step Indicators */}
+            <div className="relative z-10 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                    <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                  </div>
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">SETUP WIZARD</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step</span>
+                  <span className="text-xs font-bold text-indigo-400">{wizardStep}/3</span>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="flex gap-1.5 w-full">
+                {[1, 2, 3].map(s => (
+                  <div
+                    key={s}
+                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                      s <= wizardStep 
+                        ? 'bg-gradient-to-r from-indigo-500 to-purple-600' 
+                        : 'bg-slate-800/80'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Step 1: Starting State (Credit vs. Non-Credit) */}
             {wizardStep === 1 && (
-              <div className="space-y-6">
+              <div className="space-y-6 relative z-10">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-slate-100">1st Semester Starting State</h2>
                   <p className="text-slate-400 text-xs mt-1 leading-relaxed">
@@ -2246,13 +2533,13 @@ export default function Home() {
                         foundationOption: onboardingData.foundationOption || 'opt1',
                         creditOption: null
                       })}
-                      className={`p-4 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-28 ${
+                      className={`p-3.5 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-24 cursor-pointer ${
                         onboardingData.pathway === 'foundation'
                           ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       }`}
                     >
-                      <BookOpen className="h-5 w-5" />
+                      <BookOpen className="h-4.5 w-4.5" />
                       <div>
                         <p className="text-xs text-slate-100 font-bold">Pathway A</p>
                         <p className="text-[10px] text-slate-400 mt-0.5">Non-Credit Foundation</p>
@@ -2266,13 +2553,13 @@ export default function Home() {
                         creditOption: onboardingData.creditOption || 'opt1',
                         foundationOption: null
                       })}
-                      className={`p-4 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-28 ${
+                      className={`p-3.5 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-24 cursor-pointer ${
                         onboardingData.pathway === 'credit'
                           ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       }`}
                     >
-                      <Award className="h-5 w-5" />
+                      <Award className="h-4.5 w-4.5" />
                       <div>
                         <p className="text-xs text-slate-100 font-bold">Pathway B</p>
                         <p className="text-[10px] text-slate-400 mt-0.5">Direct Credit Courses</p>
@@ -2282,19 +2569,19 @@ export default function Home() {
 
                   {/* Sub-options for Pathway A */}
                   {onboardingData.pathway === 'foundation' && (
-                    <div className="space-y-2.5 pt-2">
-                      <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">Select all required non-credit courses:</label>
+                    <div className="space-y-3 pt-2">
+                      <label className="block text-xs font-semibold tracking-wider text-slate-400 mt-6 mb-2">Select all required non-credit courses:</label>
                       
                       <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
                         onboardingData.remedialEng091Checked
-                          ? 'bg-indigo-600/5 border-indigo-500/40 text-slate-100 font-medium'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-semibold shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialEng091Checked}
                           onChange={(e) => setOnboardingData({ ...onboardingData, remedialEng091Checked: e.target.checked })}
-                          className="mt-1 h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
+                          className="mt-1 h-4 w-4 accent-indigo-500 cursor-pointer"
                         />
                         <div>
                           <p className="text-sm font-semibold text-slate-100">ENG091 ({COURSES.find(c => c.code === "ENG091")?.title})</p>
@@ -2304,14 +2591,14 @@ export default function Home() {
 
                       <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
                         onboardingData.remedialMat091Checked
-                          ? 'bg-indigo-600/5 border-indigo-500/40 text-slate-100 font-medium'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                          ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-medium shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialMat091Checked}
                           onChange={(e) => setOnboardingData({ ...onboardingData, remedialMat091Checked: e.target.checked })}
-                          className="mt-1 h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
+                          className="mt-1 h-4 w-4 accent-indigo-500 cursor-pointer"
                         />
                         <div>
                           <p className="text-sm font-semibold text-slate-100">MAT091 ({COURSES.find(c => c.code === "MAT091")?.title})</p>
@@ -2321,14 +2608,14 @@ export default function Home() {
 
                       <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
                         onboardingData.remedialMat092Checked
-                          ? 'bg-indigo-600/5 border-indigo-500/40 text-slate-100 font-medium'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                          ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-medium shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialMat092Checked}
                           onChange={(e) => setOnboardingData({ ...onboardingData, remedialMat092Checked: e.target.checked })}
-                          className="mt-1 h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
+                          className="mt-1 h-4 w-4 accent-indigo-500 cursor-pointer"
                         />
                         <div>
                           <p className="text-sm font-semibold text-slate-100">MAT092 ({COURSES.find(c => c.code === "MAT092")?.title})</p>
@@ -2340,8 +2627,8 @@ export default function Home() {
 
                   {/* Sub-options for Pathway B */}
                   {onboardingData.pathway === 'credit' && (
-                    <div className="space-y-2.5 pt-2">
-                      <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">Select Starting English course:</label>
+                    <div className="space-y-3 pt-2">
+                      <label className="block text-xs font-semibold tracking-wider text-slate-400 mt-6 mb-2">Select starting English course:</label>
                       
                       <button
                         onClick={() => {
@@ -2354,10 +2641,10 @@ export default function Home() {
                             engStatusPriorToRS: nextPriorStatus
                           });
                         }}
-                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                           onboardingData.creditOption === 'opt1'
-                            ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                         }`}
                       >
                         <div>
@@ -2378,10 +2665,10 @@ export default function Home() {
                             engStatusPriorToRS: nextPriorStatus
                           });
                         }}
-                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                           onboardingData.creditOption === 'opt2'
-                            ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                         }`}
                       >
                         <div>
@@ -2394,19 +2681,21 @@ export default function Home() {
                   )}
                 </div>
 
-                <button
-                  onClick={() => setWizardStep(2)}
-                  disabled={!onboardingData.pathway}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-lg transition"
-                >
-                  Continue
-                </button>
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => setWizardStep(2)}
+                    disabled={!onboardingData.pathway}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
+                  >
+                    Continue
+                  </button>
+                </div>
               </div>
             )}
 
             {/* Step 2: RS Semester and Placement status */}
             {wizardStep === 2 && (
-              <div className="space-y-6">
+              <div className="space-y-6 relative z-10">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-slate-100">RS & English Placement Engine</h2>
                   <p className="text-slate-400 text-xs mt-1 leading-relaxed">
@@ -2414,19 +2703,19 @@ export default function Home() {
                   </p>
                 </div>
 
-                <div className="space-y-5">
+                <div className="space-y-6">
                   {/* Select RS Term */}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">When did you (or when will you) attend RS?</label>
+                    <label className="block text-xs font-semibold tracking-wider text-slate-400">When will you attend RS?</label>
                     <div className="grid grid-cols-3 gap-2">
                       {(["3rd Semester", "4th Semester", "5th Semester"] as const).map(term => (
                         <button
                           key={term}
                           onClick={() => setOnboardingData({ ...onboardingData, rsTerm: term })}
-                          className={`p-3 rounded-xl border text-xs font-semibold text-center transition-all duration-300 ${
+                          className={`p-3 rounded-xl border text-xs font-semibold text-center transition-all duration-300 cursor-pointer ${
                             onboardingData.rsTerm === term
                               ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                              : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                              : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                           }`}
                         >
                           {term}
@@ -2437,12 +2726,12 @@ export default function Home() {
 
                   {/* Select Starting Intake */}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">What was your Starting Intake?</label>
+                    <label className="block text-xs font-semibold tracking-wider text-slate-400">Starting intake:</label>
                     <div className="grid grid-cols-2 gap-3">
                       <select
                         value={onboardingData.startingTerm}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
-                        className="w-full bg-slate-900/60 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                        className="w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
                       >
                         <option value="Spring">Spring</option>
                         <option value="Summer">Summer</option>
@@ -2452,7 +2741,7 @@ export default function Home() {
                       <select
                         value={onboardingData.startingYear}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingYear: parseInt(e.target.value) })}
-                        className="w-full bg-slate-900/60 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                        className="w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
                       >
                         {Array.from({ length: 11 }, (_, i) => 2020 + i).map(year => (
                           <option key={year} value={year}>{year}</option>
@@ -2462,9 +2751,9 @@ export default function Home() {
                   </div>
 
                   {/* Select English Prior Status */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">
-                      {onboardingData.creditOption === 'opt2' ? "ENG102 course status PRIOR to attending RS" : "English course status PRIOR to attending RS"}
+                  <div className="space-y-2 pt-2">
+                    <label className="block text-xs font-semibold tracking-wider text-slate-400">
+                      English status prior to RS:
                     </label>
                     <div className="space-y-2.5">
                       
@@ -2472,10 +2761,10 @@ export default function Home() {
                         <>
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseA'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                             }`}
                           >
                             <div>
@@ -2487,10 +2776,10 @@ export default function Home() {
 
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseD' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseD'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                             }`}
                           >
                             <div>
@@ -2504,10 +2793,10 @@ export default function Home() {
                         <>
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseA'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                             }`}
                           >
                             <div>
@@ -2519,10 +2808,10 @@ export default function Home() {
 
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseB' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseB'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                             }`}
                           >
                             <div>
@@ -2534,10 +2823,10 @@ export default function Home() {
 
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseC' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseC'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                             }`}
                           >
                             <div>
@@ -2551,11 +2840,11 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
- 
-                <div className="flex gap-3 pt-2">
+
+                <div className="flex items-center justify-between pt-2">
                   <button
                     onClick={() => setWizardStep(1)}
-                    className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-900/60 border border-indigo-500/15 text-slate-100 font-semibold rounded-xl transition"
+                    className="text-slate-400 hover:text-slate-200 text-sm font-semibold transition cursor-pointer"
                   >
                     Back
                   </button>
@@ -2566,7 +2855,7 @@ export default function Home() {
                       }
                     }}
                     disabled={!onboardingData.engStatusPriorToRS}
-                    className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-lg transition"
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
                   >
                     Next Step
                   </button>
@@ -2576,23 +2865,25 @@ export default function Home() {
 
             {/* Step 3: Summary and Generation */}
             {wizardStep === 3 && (
-              <div className="space-y-6">
+              <div className="space-y-6 relative z-10">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-slate-100">Generate Your Study Plan</h2>
-                  <p className="text-slate-400 text-xs mt-1">Review your generated curriculum layout summary:</p>
+                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                    Review your generated curriculum layout summary:
+                  </p>
                 </div>
 
-                <div className="bg-slate-900/40 border border-indigo-500/10 p-5 rounded-xl space-y-4 text-xs shadow-[0_0_15px_rgba(99,102,241,0.03)]">
-                  <div className="flex justify-between border-b border-slate-800/40 pb-2.5">
-                    <span className="text-slate-400">Starting Pathway:</span>
-                    <span className="text-slate-100 font-semibold capitalize">
+                <div className="bg-zinc-950 border border-slate-800 p-5 rounded-xl space-y-1 text-xs shadow-md">
+                  <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
+                    <span className="text-slate-400 font-medium">Starting Pathway:</span>
+                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%] capitalize">
                       {onboardingData.pathway === 'foundation' ? "Non-Credit Foundation" : "Direct Credit Course"}
                     </span>
                   </div>
 
-                  <div className="flex justify-between border-b border-slate-800/40 pb-2.5">
-                    <span className="text-slate-400">1st Semester Course:</span>
-                    <span className="text-indigo-400 font-semibold">
+                  <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
+                    <span className="text-slate-400 font-medium">1st Semester Course:</span>
+                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%]">
                       {onboardingData.pathway === 'foundation' 
                         ? ([
                             onboardingData.remedialEng091Checked ? "ENG091" : null,
@@ -2604,29 +2895,31 @@ export default function Home() {
                     </span>
                   </div>
 
-                  <div className="flex justify-between border-b border-slate-800/40 pb-2.5">
-                    <span className="text-slate-400">RS Semester Card:</span>
-                    <span className="text-slate-100 font-semibold">{onboardingData.rsTerm} location</span>
+                  <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
+                    <span className="text-slate-400 font-medium">RS Semester Card:</span>
+                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%]">
+                      {onboardingData.rsTerm}
+                    </span>
                   </div>
 
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">RS Course Population:</span>
-                    <span className="text-indigo-400 font-semibold">
+                  <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
+                    <span className="text-slate-400 font-medium">RS Course Population:</span>
+                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%]">
                       {onboardingData.engStatusPriorToRS === 'caseA' ? "EMB101 + HUM103 + BNG103 + ENG102" : "EMB101 + HUM103 + BNG103 + BU201"}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex items-center justify-between">
                   <button
                     onClick={() => setWizardStep(2)}
-                    className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-900/60 border border-indigo-500/15 text-slate-100 font-semibold rounded-xl transition"
+                    className="text-slate-400 hover:text-slate-200 text-sm font-semibold transition cursor-pointer"
                   >
                     Back
                   </button>
                   <button
                     onClick={generateInitialPlan}
-                    className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-slate-100 font-semibold rounded-xl shadow-lg transition"
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
                   >
                     Generate Plan
                   </button>
@@ -2635,14 +2928,13 @@ export default function Home() {
             )}
           </div>
         </div>
-      </div>
       ) : (
         /* Actual App Dashboard */
         <div className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 flex flex-col">
           <div className="flex-1 flex flex-col lg:flex-row gap-6">
             
             {/* A. LEFT SIDEBAR: Degree Progress & Statistics */}
-            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-48px)] flex flex-col gap-6 lg:overflow-y-auto pr-2 custom-scrollbar pb-6">
+            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-32px)] flex flex-col gap-6 lg:overflow-y-auto pr-2 custom-scrollbar">
               
               {/* 1. Degree Standing Card */}
               <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
@@ -2990,50 +3282,50 @@ export default function Home() {
               </aside>
 
           {/* B. RIGHT PANEL: Semester Timeline Card Schedule */}
-          <main className="flex-1 lg:overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-6">
+          <main className="flex-1 lg:overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-0">
             
             {/* Semester timelines header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-indigo-400" />
-                <h2 className="text-base font-bold tracking-tight text-slate-100">Curriculum Plan Semester Cards</h2>
+                <h2 className="text-base font-bold tracking-tight text-slate-100">Semester Planner</h2>
               </div>
               <div className="flex items-center gap-2">
                 {/* View Switcher Toggle (Hidden on mobile) */}
                 <div className="hidden md:flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner mr-2">
                   <button
                     onClick={() => handleToggleViewMode("list")}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    title="List Feed"
+                    className={`inline-flex items-center px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       currentLayout === "list"
                         ? "bg-indigo-600 text-slate-100 shadow-sm"
                         : "text-slate-400 hover:text-slate-100"
                     }`}
                   >
                     <List className="h-3.5 w-3.5" />
-                    <span>List Feed</span>
                   </button>
                   <button
                     onClick={() => handleToggleViewMode("kanban")}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    title="Kanban Board"
+                    className={`inline-flex items-center px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       currentLayout === "kanban"
                         ? "bg-indigo-600 text-slate-100 shadow-sm"
                         : "text-slate-400 hover:text-slate-100"
                     }`}
                   >
                     <Columns className="h-3.5 w-3.5" />
-                    <span>Kanban Board</span>
                   </button>
                 </div>
 
                 <button
                   onClick={handleToggleAllCollapse}
-                  className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-100 hover:text-slate-100 text-xs font-semibold px-3 py-2 rounded-lg transition"
+                  className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-100 hover:text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-lg transition whitespace-nowrap"
                 >
                   {isAnyExpanded ? "Collapse All" : "Expand All"}
                 </button>
                 <button
                   onClick={handleAddSemester}
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-slate-100 text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md transition"
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-slate-100 text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition whitespace-nowrap"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Add Semester</span>
@@ -3042,12 +3334,13 @@ export default function Home() {
             </div>
 
             {/* List of Semester Cards */}
-            <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-3 px-1 items-end snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
+            <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-3 px-1 items-stretch snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
               {semesters.map((sem, semIdx) => {
                 const stats = semesterStats.find(s => s.id === sem.id);
                 const hasCSE400 = sem.courses.some(c => c.code === "CSE400");
                 const isSemester9Plus = semIdx >= 8; // index 8 is the 9th semester card
                 const intake = semesterIntakes[semIdx];
+                const isAllCompleted = sem.courses.length > 0 && sem.courses.every(c => c.isCompleted);
 
                 return (
                   <div 
@@ -3064,7 +3357,7 @@ export default function Home() {
                     onDragLeave={() => setDragOverSemesterId(null)}
                     className={`${
                       currentLayout === 'kanban' 
-                        ? "w-[340px] min-w-[340px] flex-shrink-0 snap-start scale-y-[-1]" 
+                        ? `w-[340px] min-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] ${sem.isCollapsed ? 'self-start' : ''}` 
                         : ""
                     } bg-zinc-900/70 border rounded-xl overflow-visible shadow-xl backdrop-blur-md hover:border-slate-800 transition-all duration-300 ${
                       draggingCourseCode && dragOverSemesterId === sem.id 
@@ -3073,11 +3366,25 @@ export default function Home() {
                     }`}
                   >
                                   {/* Semester Card Header */}
-                    <div className={`bg-white/[0.02] px-6 py-4 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-slate-800/40"}`}>
+                    <div className={`bg-white/[0.02] px-4 py-4 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-slate-800/40"}`}>
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="h-2 w-2 rounded-full bg-purple-500 shadow-[0_0_6px_#8b5cf6]" />
+                        <button
+                          onClick={() => handleToggleSemesterAllCompleted(sem.id)}
+                          title="Toggle all courses in semester"
+                          className={`h-4.5 w-4.5 rounded-full border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                            isAllCompleted
+                              ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_10px_rgba(59,130,246,0.6)]'
+                              : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                          }`}
+                        >
+                          {isAllCompleted && (
+                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          )}
+                        </button>
                         <h3 className="font-bold text-sm text-slate-100 tracking-tight flex flex-wrap items-center gap-2">
-                          <span>{sem.isRS ? "Residential Semester (RS)" : `Semester ${semIdx + 1}`}</span>
+                          <span>{`Semester ${semIdx + 1}`}</span>
                           <span className="text-zinc-700 font-normal">|</span>
                           <div className="flex items-center gap-1.5">
                             <select
@@ -3102,7 +3409,7 @@ export default function Home() {
                         </h3>
                         {sem.isRS ? (
                           <span className="text-[9px] font-bold bg-purple-500/10 border border-slate-800 text-purple-400 px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
-                            RS Campus
+                            RS
                           </span>
                         ) : (
                           <button
@@ -3160,7 +3467,7 @@ export default function Home() {
 
                     {/* Course list grid in Semester Card */}
                     {!sem.isCollapsed && (
-                      <div className="p-4 divide-y divide-zinc-800/60">
+                      <div className="p-4 divide-y divide-zinc-800/60 flex-grow">
                       
                       {sem.courses.length === 0 && (
                         <div className="py-6 text-center text-slate-400 text-xs">
@@ -3212,12 +3519,21 @@ export default function Home() {
                               
                               {/* Left side checklist check & Mode B Grade dropdown */}
                               <div className="flex items-center gap-2 mt-0.5">
-                                <input
-                                  type="checkbox"
-                                  checked={c.isCompleted}
-                                  onChange={(e) => handleCompletionToggle(sem.id, c.code, e.target.checked)}
-                                  className="h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
-                                />
+                                <button
+                                  onClick={() => handleCompletionToggle(sem.id, c.code, !c.isCompleted)}
+                                  title={c.isCompleted ? "Mark as incomplete" : "Mark as complete"}
+                                  className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                                    c.isCompleted
+                                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                                      : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                                  }`}
+                                >
+                                  {c.isCompleted && (
+                                    <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                  )}
+                                </button>
                                 
                                 {mode === 'gpa' && isCreditCourse && (
                                   <select
@@ -3722,16 +4038,18 @@ export default function Home() {
             </div>
 
             {/* Scrollable Printable Grade Sheet Container */}
-            <div className="overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 space-y-6">
-              {/* Visible Grade Sheet Node Target */}
-              <div 
-                id="flow136-grade-sheet-export-node"
-                style={{ 
-                  backgroundColor: '#050507',
-                  fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-                }}
-                className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-xl p-6 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto"
-              >
+            <div className="overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 flex items-start justify-center">
+              {/* Responsive scaling wrapper for mobile screens to fit 750px inside narrow viewports */}
+              <div className="w-[750px] shrink-0 md:transform-none transform scale-[0.45] xs:scale-[0.52] sm:scale-[0.72] md:scale-100 origin-top -my-[270px] xs:-my-[230px] sm:-my-[110px] md:my-0 transition-all duration-300">
+                {/* Visible Grade Sheet Node Target */}
+                <div 
+                  id="flow136-grade-sheet-export-node"
+                  style={{ 
+                    backgroundColor: '#050507',
+                    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+                  }}
+                  className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-xl p-6 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto"
+                >
                 {/* Watermark Background (Z-Index 0) */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
                   <span className="text-[120px] font-black tracking-tighter text-slate-100/[0.03] transform -rotate-12 whitespace-nowrap">
@@ -3907,8 +4225,9 @@ export default function Home() {
                     Flow136 &bull; Your curriculum, minus the complexity.
                   </p>
                 </div>
-              </div>
-            </div>
+              </div> {/* End flow136-grade-sheet-export-node */}
+            </div> {/* End scale-wrapper */}
+          </div> {/* End scrollable container */}
 
             {/* Modal Footer Controls */}
             <div className="pt-4 border-t border-slate-800/60 flex justify-end gap-3 no-print">
@@ -3927,13 +4246,13 @@ export default function Home() {
       {/* Recommended Curriculum Roadmap Modal Overlay */}
       {showRoadmapModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#09090b] border border-slate-800 rounded-xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl">
+          <div className="bg-[#09090b] border border-slate-800 rounded-xl max-w-[95vw] md:max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl text-xs md:text-sm">
             {/* Ambient glows inside modal */}
             <div className="absolute top-[-10%] left-[-10%] w-[30%] h-[30%] rounded-full bg-indigo-500/10 blur-[80px] pointer-events-none" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] rounded-full bg-purple-500/10 blur-[80px] pointer-events-none" />
             
             {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-800/85 flex items-center justify-between relative z-10 shrink-0">
+            <div className="px-4 md:px-6 py-4 border-b border-slate-800/85 flex items-center justify-between relative z-10 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
                   <HelpCircle className="h-5 w-5" />
@@ -3952,7 +4271,7 @@ export default function Home() {
             </div>
 
             {/* Scrollable Modal Content */}
-            <div className="flex-grow overflow-auto p-6 relative z-10 custom-scrollbar">
+            <div className="flex-grow overflow-auto p-4 md:p-6 relative z-10 custom-scrollbar">
               <div className="min-w-[950px] space-y-6">
                 
                 {/* Stats Summary Header - CSE Curriculum */}

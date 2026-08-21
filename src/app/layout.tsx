@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Flow136 | BRACU CSE Curriculum & CGPA Planner",
   description: "Your curriculum, minus the complexity. Map out your 136-credit BRACU CSE degree cleanly and offline with Flow136.",
+  icons: {
+    icon: "/icon.svg",
+  },
   openGraph: {
     title: "Flow136",
     description: "Your curriculum, minus the complexity. Map out your 136-credit BRACU CSE degree cleanly and offline with Flow136.",
