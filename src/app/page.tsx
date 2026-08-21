@@ -575,24 +575,43 @@ export default function Home() {
       }
 
       // Micro-delay to let DOM state settle
-      await new Promise(res => setTimeout(res, 30));
+      await new Promise(res => setTimeout(res, 50));
+
+      const parent = node.parentElement;
+      const originalScrollTop = parent ? parent.scrollTop : 0;
+      const originalScrollLeft = parent ? parent.scrollLeft : 0;
+
+      // Temporarily scroll parent container to top to prevent html-to-image cropping bug
+      if (parent) {
+        parent.scrollTop = 0;
+        parent.scrollLeft = 0;
+      }
+
+      const width = node.offsetWidth || 750;
+      const height = node.offsetHeight || node.scrollHeight;
 
       toBlob(node, {
-        cacheBust: false,
+        cacheBust: true,
         skipFonts: false,
-        pixelRatio: 1.5,
-        backgroundColor: '#030712',
-        width: 750,
-        height: node.scrollHeight,
-        windowWidth: 1200,
-        windowHeight: node.scrollHeight + 100,
+        pixelRatio: 2.0, // Clean, high-definition output
+        backgroundColor: '#050507',
+        width: width,
+        height: height,
         style: {
-          width: '750px',
-          height: `${node.scrollHeight}px`,
+          width: `${width}px`,
+          height: `${height}px`,
           maxHeight: 'none',
-          overflow: 'visible'
+          overflow: 'visible',
+          transform: 'none',
+          margin: '0 auto'
         }
       } as any).then((blob) => {
+        // Restore parent scroll positions immediately after canvas paint completes
+        if (parent) {
+          parent.scrollTop = originalScrollTop;
+          parent.scrollLeft = originalScrollLeft;
+        }
+
         if (!blob) {
           throw new Error("Blob generation failed");
         }
@@ -609,6 +628,11 @@ export default function Home() {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         setIsGeneratingSnapshot(false);
       }).catch((err) => {
+        // Guarantee parent scroll state recovery in error path
+        if (parent) {
+          parent.scrollTop = originalScrollTop;
+          parent.scrollLeft = originalScrollLeft;
+        }
         console.error('Image export failed:', err);
         setIsGeneratingSnapshot(false);
       });
@@ -788,7 +812,7 @@ export default function Home() {
       );
     } else {
       return (
-        <span className="text-[8px] font-extrabold border border-zinc-800 text-zinc-500 bg-zinc-900 px-1.5 py-0.5 rounded uppercase tracking-wider select-none">
+        <span className="text-[8px] font-extrabold border border-slate-800 text-slate-400 bg-zinc-900 px-1.5 py-0.5 rounded uppercase tracking-wider select-none">
           [Elective]
         </span>
       );
@@ -1667,19 +1691,19 @@ export default function Home() {
 
   const CSE400 = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) => {
     return (
-      <div className="bg-zinc-950/75 border border-zinc-850 rounded-2xl p-6 backdrop-blur-md shadow-2xl relative overflow-hidden mt-6">
+      <div className="bg-zinc-950/75 border border-slate-800 rounded-xl p-6 backdrop-blur-md shadow-2xl relative overflow-hidden mt-6">
         <div className="absolute top-0 right-0 h-40 w-40 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
         
-        <div className={`flex flex-wrap items-center justify-between gap-3 ${isCollapsed ? "" : "border-b border-zinc-800/80 pb-4 mb-6"}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-3 ${isCollapsed ? "" : "border-b border-slate-800/80 pb-4 mb-6"}`}>
           <div>
-            <h3 className="font-extrabold text-base text-white tracking-tight flex items-center gap-2">
+            <h3 className="font-extrabold text-base text-slate-100 tracking-tight flex items-center gap-2">
               <Award className="h-5 w-5 text-purple-400" />
               CSE400
             </h3>
             <p className="text-xs text-zinc-450 mt-1">Final Year Capstone: Thesis, Project, or Internship</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold bg-zinc-950/40 border border-zinc-800 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
+            <span className="text-[10px] font-bold bg-zinc-950/40 border border-slate-800 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
               {isCSE400Passed ? "Completed: 4 / 4 Cr" : "Incomplete: 0 / 4 Cr"}
             </span>
             {isCSE400Passed ? (
@@ -1701,7 +1725,7 @@ export default function Home() {
                 }
               }}
               aria-label="Toggle Capstone Module"
-              className="relative z-30 pointer-events-auto cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all select-none flex-shrink-0"
+              className="relative z-30 pointer-events-auto cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-slate-800/60 text-slate-100 hover:text-slate-100 transition-all select-none flex-shrink-0"
               title={isCollapsed ? "Expand Capstone" : "Minimize Capstone"}
             >
               {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -1713,7 +1737,7 @@ export default function Home() {
           <div className="space-y-6">
             {/* Track selector tabs/cards */}
             <div className="space-y-3">
-              <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block">Choose Capstone Track Path</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Choose Capstone Track Path</label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {(['thesis', 'project', 'internship'] as const).map(track => {
                   const isSelected = thesisTrack === track;
@@ -1739,8 +1763,8 @@ export default function Home() {
                       }}
                       className={`p-4 rounded-xl border text-left flex flex-col justify-between transition-all duration-300 group ${
                         isSelected 
-                          ? 'border-indigo-400 bg-indigo-500/10 text-white font-semibold shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
-                          : 'bg-zinc-955/40 border-zinc-800 hover:border-zinc-700 text-slate-400 hover:bg-white/5 hover:text-zinc-200'
+                          ? 'border-indigo-400 bg-indigo-500/10 text-slate-100 font-semibold shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
+                          : 'bg-zinc-900/40 border-slate-800 hover:border-zinc-700 text-slate-400 hover:bg-white/5 hover:text-slate-100'
                       }`}
                     >
                       <div>
@@ -1750,7 +1774,7 @@ export default function Home() {
                           </span>
                           <span className={`h-2 w-2 rounded-full transition ${isSelected ? 'bg-indigo-500 shadow-[0_0_8px_#6366f1]' : 'bg-zinc-800'}`} />
                         </div>
-                        <p className="text-[10px] leading-relaxed text-zinc-500 group-hover:text-zinc-405 transition">
+                        <p className="text-[10px] leading-relaxed text-slate-400 group-hover:text-zinc-405 transition">
                           {desc}
                         </p>
                       </div>
@@ -1761,13 +1785,13 @@ export default function Home() {
             </div>
 
             {/* Checklist & Grade details */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t border-zinc-800/80">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t border-slate-800/80">
               <div className="space-y-3">
-                <p className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider">Milestone Checklist</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Milestone Checklist</p>
                 
                 {thesisTrack === 'thesis' && (
-                  <div className="space-y-3 bg-zinc-900/30 border border-zinc-855 p-4 rounded-xl">
-                    <label className="flex items-center gap-3 text-xs text-zinc-300 cursor-pointer select-none">
+                  <div className="space-y-3 bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
+                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={thesisSteps.step1}
@@ -1776,11 +1800,11 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className="h-4 w-4 accent-purple-500 rounded border-zinc-800"
+                        className="h-4 w-4 accent-purple-500 rounded border-slate-800"
                       />
                       <span>Step 1: Thesis Topic & Advisor Approved</span>
                     </label>
-                    <label className="flex items-center gap-3 text-xs text-zinc-300 cursor-pointer select-none">
+                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={thesisSteps.step2}
@@ -1789,25 +1813,25 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className="h-4 w-4 accent-purple-500 rounded border-zinc-800"
+                        className="h-4 w-4 accent-purple-500 rounded border-slate-800"
                       />
                       <span>Step 2: Mid-term defense cleared</span>
                     </label>
-                    <label className="flex items-center gap-3 text-xs text-zinc-300 cursor-pointer select-none">
+                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={thesisSteps.step3}
                         onChange={(e) => handleThesisStep3Toggle(e.target.checked)}
-                        className="h-4 w-4 accent-purple-500 rounded border-zinc-800"
+                        className="h-4 w-4 accent-purple-500 rounded border-slate-800"
                       />
-                      <span className="font-semibold text-white">Step 3: Final defense report defended & approved</span>
+                      <span className="font-semibold text-slate-100">Step 3: Final defense report defended & approved</span>
                     </label>
                   </div>
                 )}
 
                 {thesisTrack === 'project' && (
-                  <div className="bg-zinc-900/30 border border-zinc-855 p-4 rounded-xl">
-                    <label className="flex items-center gap-3 text-xs text-zinc-300 cursor-pointer select-none">
+                  <div className="bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
+                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={projectCompleted}
@@ -1816,10 +1840,10 @@ export default function Home() {
                           handleCSE400CompletionToggle(e.target.checked);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, e.target.checked, internshipCompleted, onboardingData);
                         }}
-                        className="h-4.5 w-4.5 accent-purple-500 rounded border-zinc-800"
+                        className="h-4.5 w-4.5 accent-purple-500 rounded border-slate-800"
                       />
                       <div>
-                        <p className="font-semibold text-white">Final Project Built & Defended</p>
+                        <p className="font-semibold text-slate-100">Final Project Built & Defended</p>
                         <p className="text-[10px] text-zinc-555 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
                       </div>
                     </label>
@@ -1827,8 +1851,8 @@ export default function Home() {
                 )}
 
                 {thesisTrack === 'internship' && (
-                  <div className="bg-zinc-900/30 border border-zinc-855 p-4 rounded-xl">
-                    <label className="flex items-center gap-3 text-xs text-zinc-300 cursor-pointer select-none">
+                  <div className="bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
+                    <label className="flex items-center gap-3 text-xs text-slate-100 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={internshipCompleted}
@@ -1837,10 +1861,10 @@ export default function Home() {
                           handleCSE400CompletionToggle(e.target.checked);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, projectCompleted, e.target.checked, onboardingData);
                         }}
-                        className="h-4.5 w-4.5 accent-purple-500 rounded border-zinc-800"
+                        className="h-4.5 w-4.5 accent-purple-500 rounded border-slate-800"
                       />
                       <div>
-                        <p className="font-semibold text-white">Internship Completed & Report Submitted</p>
+                        <p className="font-semibold text-slate-100">Internship Completed & Report Submitted</p>
                         <p className="text-[10px] text-zinc-555 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
                       </div>
                     </label>
@@ -1849,15 +1873,15 @@ export default function Home() {
               </div>
 
               {mode === 'gpa' && (
-                <div className="space-y-3 bg-zinc-900/30 border border-zinc-855 p-4 rounded-xl flex flex-col justify-between">
+                <div className="space-y-3 bg-zinc-900/30 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
                   <div>
-                    <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-wider block mb-1">Final Capstone Grade</label>
-                    <p className="text-[10px] text-zinc-500 leading-relaxed">Select the final grade scored in CSE400 for cumulative CGPA calculation.</p>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Final Capstone Grade</label>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">Select the final grade scored in CSE400 for cumulative CGPA calculation.</p>
                   </div>
                   <select
                     value={cse400Course?.grade || ""}
                     onChange={(e) => handleCSE400GradeChange(e.target.value)}
-                    className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 rounded-xl px-3 py-2 w-full focus:border-purple-500 outline-none cursor-pointer mt-2 font-semibold"
+                    className="bg-zinc-900 border border-slate-800 text-xs text-slate-100 rounded-xl px-3 py-2 w-full focus:border-purple-500 outline-none cursor-pointer mt-2 font-semibold"
                   >
                     <option value="">Select Grade</option>
                     {Object.keys(GRADING_SCALE).map(g => (
@@ -1875,11 +1899,11 @@ export default function Home() {
 
   if (!isMounted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#08080a] text-zinc-100 font-sans">
+      <div className="flex min-h-screen items-center justify-center bg-[#08080a] text-slate-100 font-sans">
         <div className="flex flex-col items-center gap-4 text-center">
           <GraduationCap className="h-16 w-16 text-indigo-500 animate-pulse" />
           <h1 className="text-xl font-bold tracking-tight">Loading Flow136...</h1>
-          <p className="text-zinc-500 text-sm">Organizing your degree curriculum...</p>
+          <p className="text-slate-400 text-sm">Organizing your degree curriculum...</p>
         </div>
       </div>
     );
@@ -1889,13 +1913,13 @@ export default function Home() {
 
   if (!showDashboard) {
     return (
-      <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-zinc-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
+      <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
         {/* Glow ambient background lights */}
         <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[150px] pointer-events-none" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/10 blur-[150px] pointer-events-none" />
 
         {/* Top Header/Bar for Landing */}
-        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-white/5 relative z-10">
+        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-slate-800/40 relative z-10">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
               <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
@@ -1913,7 +1937,7 @@ export default function Home() {
 
         {/* Hero Section */}
         <main className="flex-grow flex flex-col items-center justify-center text-center px-4 py-16 relative z-10 max-w-6xl mx-auto w-full">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-300 mb-8 animate-pulse">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-slate-800 text-xs font-semibold text-indigo-300 mb-8 animate-pulse">
             <GraduationCap className="h-4 w-4" />
             <span>BRACU CSE Degree Companion</span>
           </div>
@@ -1923,7 +1947,7 @@ export default function Home() {
           </h1>
 
           <div className="max-w-2xl mx-auto mb-10 flex flex-col items-center">
-            <p className="text-xl md:text-2xl text-slate-200 font-semibold leading-relaxed">
+            <p className="text-xl md:text-2xl text-slate-100 font-semibold leading-relaxed">
               Your curriculum, minus the complexity.
             </p>
             <p className="text-base md:text-lg text-slate-400 font-medium mt-2 leading-relaxed">
@@ -1935,7 +1959,7 @@ export default function Home() {
           <div className="mb-20">
             <button
               onClick={() => setShowDashboard(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5"
+              className="bg-indigo-600 hover:bg-indigo-500 text-slate-100 shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5"
             >
               <span>Continue to Tracker</span>
               <ArrowRight className="h-5 w-5" />
@@ -1951,55 +1975,55 @@ export default function Home() {
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
               {/* Feature 1 */}
-              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 transition-all">
+              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 transition-all">
                   <GraduationCap className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-white mb-2">CGPA Tracker</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA Tracker</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Log grades, track semester GPAs, and monitor cumulative progress dynamically.
                 </p>
               </div>
 
               {/* Feature 2 */}
-              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 transition-all">
+              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-slate-800 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 transition-all">
                   <BookOpen className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-white mb-2">GenEd Progress Tracker</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">GenEd Progress Tracker</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Auto-validate GenEd stream distributions and ensure all graduation credits align.
                 </p>
               </div>
 
               {/* Feature 3 */}
-              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
                 <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 transition-all">
                   <TrendingUp className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-white mb-2">CGPA ROI Analyzer</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA ROI Analyzer</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Analyze retake options and see the exact return on investment for grade improvements.
                 </p>
               </div>
 
               {/* Feature 4 */}
-              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
                 <div className="h-12 w-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 mb-4 group-hover:bg-pink-500/20 transition-all">
                   <Target className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-white mb-2">Target CGPA Calculator</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">Target CGPA Calculator</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Solve exactly what GPAs you need in future semesters to reach your target goals.
                 </p>
               </div>
 
               {/* Feature 5 */}
-              <div className="bg-zinc-950/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 transition-all duration-300 group hover:-translate-y-1">
+              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
                 <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 transition-all">
                   <FileText className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-white mb-2">Snapshot Progress</h3>
+                <h3 className="text-sm font-bold text-slate-100 mb-2">Snapshot Progress</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Instantly download your official curriculum progress as a crisp PNG image.
                 </p>
@@ -2009,9 +2033,9 @@ export default function Home() {
         </main>
 
         {/* Landing Page Footer */}
-        <footer className="w-full py-10 px-6 border-t border-white/5 bg-[#050507]/40 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
+        <footer className="w-full py-10 px-6 border-t border-slate-800/40 bg-[#050507]/40 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
           {/* Connect with me social links (Scaled Up) */}
-          <div className="flex flex-col md:flex-row items-center gap-5 text-sm font-semibold text-zinc-300">
+          <div className="flex flex-col md:flex-row items-center gap-5 text-sm font-semibold text-slate-100">
             <span className="text-sm lg:text-base font-bold text-slate-400 tracking-wider uppercase">Connect with me:</span>
             <a
               href="https://github.com/fakekhanabdullah"
@@ -2039,7 +2063,7 @@ export default function Home() {
             <p>© 2026 Flow136. Made by: Khan Abdullah</p>
           </div>
 
-          <p className="text-[10px] text-zinc-500 max-w-md leading-relaxed">
+          <p className="text-[10px] text-slate-400 max-w-md leading-relaxed">
             Disclaimer: Not officially affiliated with BRAC University. All curriculum guidelines and course codes reflect official CSE program requirements.
           </p>
         </footer>
@@ -2048,9 +2072,9 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-zinc-100 font-sans antialiased flex flex-col">
+    <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col">
       {/* 1. Header Navigation */}
-      <header className="border-b border-zinc-800/80 bg-[#050507]/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl shadow-black/30">
+      <header className="border-b border-slate-800/80 bg-[#050507]/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl shadow-black/30">
         <div 
           onClick={() => setShowDashboard(false)}
           className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
@@ -2072,13 +2096,13 @@ export default function Home() {
         {/* Action controls */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Mode Switcher */}
-          <div className="flex bg-zinc-950/40 border border-white/5 p-1 rounded-xl">
+          <div className="flex bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl">
             <button
               onClick={() => mode !== 'tracker' && handleModeToggle()}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'tracker' 
-                  ? 'bg-purple-950/20 text-purple-400 border border-purple-500/20 shadow-md' 
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               Course Tracker Only
@@ -2087,8 +2111,8 @@ export default function Home() {
               onClick={() => mode !== 'gpa' && handleModeToggle()}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'gpa' 
-                  ? 'bg-purple-950/20 text-purple-400 border border-purple-500/20 shadow-md' 
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               Course + CGPA Planner
@@ -2100,13 +2124,13 @@ export default function Home() {
             <button
               onClick={handleExportBackup}
               title="Download backup plan"
-              className="flex items-center gap-1.5 bg-zinc-950/40 hover:bg-zinc-900/60 border border-white/5 text-zinc-300 text-xs px-3 py-2 rounded-xl transition"
+              className="flex items-center gap-1.5 bg-zinc-950/40 hover:bg-zinc-900/60 border border-slate-800/40 text-slate-100 text-xs px-3 py-2 rounded-xl transition"
             >
               <Download className="h-3.5 w-3.5" />
               <span>Backup</span>
             </button>
             
-            <label className="flex items-center gap-1.5 bg-zinc-950/40 hover:bg-zinc-900/60 border border-white/5 text-zinc-300 text-xs px-3 py-2 rounded-xl cursor-pointer transition">
+            <label className="flex items-center gap-1.5 bg-zinc-950/40 hover:bg-zinc-900/60 border border-slate-800/40 text-slate-100 text-xs px-3 py-2 rounded-xl cursor-pointer transition">
               <Upload className="h-3.5 w-3.5" />
               <span>Restore</span>
               <input
@@ -2119,7 +2143,7 @@ export default function Home() {
 
             <button
               onClick={() => setShowRoadmapModal(true)}
-              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
               title="View recommended CSE/CS curriculum roadmap"
             >
               <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
@@ -2128,7 +2152,7 @@ export default function Home() {
 
             <button
               onClick={() => setShowGradeSheetModal(true)}
-              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-indigo-500/30 text-slate-200 hover:text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-slate-100 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-lg transition-all cursor-pointer shadow-sm"
               title="Open official progress grade sheet preview modal"
             >
               <FileText className="h-3.5 w-3.5 text-indigo-400" />
@@ -2148,7 +2172,7 @@ export default function Home() {
 
       {/* 2. Top-level Alert Panels (Standing warnings) */}
       {mode === 'gpa' && (
-        <div className="px-6 pt-4 flex flex-col gap-3">
+        <div className="w-full max-w-7xl mx-auto px-4 lg:px-6 pt-4 flex flex-col gap-3">
           {cumulativeStats.cgpa > 0 && cumulativeStats.cgpa < 1.50 && (
             <div className="flex items-center gap-3 bg-red-950/20 border border-red-900/50 p-4 rounded-xl text-red-400">
               <AlertTriangle className="h-5 w-5 shrink-0" />
@@ -2169,14 +2193,16 @@ export default function Home() {
       )}
 
       {backupFileError && (
-        <div className="mx-6 mt-4 flex items-center justify-between gap-3 bg-rose-950/30 border border-rose-900/40 p-4 rounded-xl text-rose-400">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5" />
-            <p className="text-sm">{backupFileError}</p>
+        <div className="w-full max-w-7xl mx-auto px-4 lg:px-6 mt-4">
+          <div className="flex items-center justify-between gap-3 bg-rose-950/30 border border-rose-900/40 p-4 rounded-xl text-rose-400">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5" />
+              <p className="text-sm">{backupFileError}</p>
+            </div>
+            <button onClick={() => setBackupFileError(null)}>
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button onClick={() => setBackupFileError(null)}>
-            <X className="h-4 w-4" />
-          </button>
         </div>
       )}
 
@@ -2184,7 +2210,7 @@ export default function Home() {
       {!isOnboarded ? (
         /* Onboarding Wizard Modal overlay if not onboarded */
         <div className="flex-1 flex items-center justify-center p-6 pb-20 bg-gradient-to-br from-[#030303] via-[#08080a] to-[#0d0d12] overflow-y-auto">
-          <div className="w-full max-w-2xl bg-zinc-950/75 border border-zinc-855 rounded-2xl shadow-2xl transition-all backdrop-blur-md overflow-hidden p-0 pb-16 mb-16">
+          <div className="w-full max-w-2xl bg-zinc-950/75 border border-slate-800 rounded-xl shadow-2xl transition-all backdrop-blur-md overflow-hidden p-0 pb-16 mb-16">
             <div className="w-full max-h-[85vh] overflow-y-auto p-8 pr-6 custom-scrollbar">
             {/* Step Indicators */}
             <div className="flex items-center gap-2 mb-8">
@@ -2204,8 +2230,8 @@ export default function Home() {
             {wizardStep === 1 && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-white">1st Semester Starting State</h2>
-                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                  <h2 className="text-xl font-bold tracking-tight text-slate-100">1st Semester Starting State</h2>
+                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                     How did you start your 1st Semester at BRACU? Choose your starting entry point to map your calculus and English pathways.
                   </p>
                 </div>
@@ -2222,14 +2248,14 @@ export default function Home() {
                       })}
                       className={`p-4 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-28 ${
                         onboardingData.pathway === 'foundation'
-                          ? 'bg-indigo-950/20 border-indigo-500/30 text-indigo-400 font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                          : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
+                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
                       }`}
                     >
                       <BookOpen className="h-5 w-5" />
                       <div>
-                        <p className="text-xs text-white font-bold">Pathway A</p>
-                        <p className="text-[10px] text-zinc-550 mt-0.5">Non-Credit Foundation</p>
+                        <p className="text-xs text-slate-100 font-bold">Pathway A</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Non-Credit Foundation</p>
                       </div>
                     </button>
 
@@ -2242,24 +2268,28 @@ export default function Home() {
                       })}
                       className={`p-4 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-28 ${
                         onboardingData.pathway === 'credit'
-                          ? 'bg-indigo-950/20 border-indigo-500/30 text-indigo-400 font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                          : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
+                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
                       }`}
                     >
                       <Award className="h-5 w-5" />
                       <div>
-                        <p className="text-xs text-white font-bold">Pathway B</p>
-                        <p className="text-[10px] text-zinc-555 mt-0.5">Direct Credit Courses</p>
+                        <p className="text-xs text-slate-100 font-bold">Pathway B</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Direct Credit Courses</p>
                       </div>
                     </button>
                   </div>
 
                   {/* Sub-options for Pathway A */}
                   {onboardingData.pathway === 'foundation' && (
-                    <div className="space-y-2 pt-2">
+                    <div className="space-y-2.5 pt-2">
                       <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">Select all required non-credit courses:</label>
                       
-                      <label className="flex items-start gap-3 bg-slate-900/40 p-4 rounded-xl border border-indigo-500/10 hover:border-indigo-500/20 transition-all duration-300 cursor-pointer">
+                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                        onboardingData.remedialEng091Checked
+                          ? 'bg-indigo-600/5 border-indigo-500/40 text-slate-100 font-medium'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                      }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialEng091Checked}
@@ -2267,12 +2297,16 @@ export default function Home() {
                           className="mt-1 h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
                         />
                         <div>
-                          <p className="text-sm font-semibold text-white">ENG091 (Foundation Course in English)</p>
-                          <p className="text-xs text-zinc-500 mt-0.5">Required for students needing basic English grounding</p>
+                          <p className="text-sm font-semibold text-slate-100">ENG091 ({COURSES.find(c => c.code === "ENG091")?.title})</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Required for students needing basic English grounding</p>
                         </div>
                       </label>
 
-                      <label className="flex items-start gap-3 bg-slate-900/40 p-4 rounded-xl border border-indigo-500/10 hover:border-indigo-500/20 transition-all duration-300 cursor-pointer">
+                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                        onboardingData.remedialMat091Checked
+                          ? 'bg-indigo-600/5 border-indigo-500/40 text-slate-100 font-medium'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                      }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialMat091Checked}
@@ -2280,12 +2314,16 @@ export default function Home() {
                           className="mt-1 h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
                         />
                         <div>
-                          <p className="text-sm font-semibold text-white">MAT091 (Basic Course in Mathematics I)</p>
-                          <p className="text-xs text-zinc-500 mt-0.5">Basic remedial pre-calculus algebra</p>
+                          <p className="text-sm font-semibold text-slate-100">MAT091 ({COURSES.find(c => c.code === "MAT091")?.title})</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Basic remedial pre-calculus algebra</p>
                         </div>
                       </label>
 
-                      <label className="flex items-start gap-3 bg-slate-900/40 p-4 rounded-xl border border-indigo-500/10 hover:border-indigo-500/20 transition-all duration-300 cursor-pointer">
+                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                        onboardingData.remedialMat092Checked
+                          ? 'bg-indigo-600/5 border-indigo-500/40 text-slate-100 font-medium'
+                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                      }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialMat092Checked}
@@ -2293,8 +2331,8 @@ export default function Home() {
                           className="mt-1 h-4.5 w-4.5 accent-indigo-500 cursor-pointer"
                         />
                         <div>
-                          <p className="text-sm font-semibold text-white">MAT092 (Basic Course in Mathematics II)</p>
-                          <p className="text-xs text-zinc-500 mt-0.5">Intermediate remedial algebra prior to MAT110 Calculus</p>
+                          <p className="text-sm font-semibold text-slate-100">MAT092 ({COURSES.find(c => c.code === "MAT092")?.title})</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Intermediate remedial algebra prior to MAT110 Calculus</p>
                         </div>
                       </label>
                     </div>
@@ -2302,35 +2340,53 @@ export default function Home() {
 
                   {/* Sub-options for Pathway B */}
                   {onboardingData.pathway === 'credit' && (
-                    <div className="space-y-2 pt-2">
+                    <div className="space-y-2.5 pt-2">
                       <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">Select Starting English course:</label>
                       
                       <button
-                        onClick={() => setOnboardingData({ ...onboardingData, creditOption: 'opt1' })}
-                        className={`w-full p-3 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                        onClick={() => {
+                          const nextPriorStatus = onboardingData.engStatusPriorToRS === 'caseD'
+                            ? null
+                            : onboardingData.engStatusPriorToRS;
+                          setOnboardingData({
+                            ...onboardingData,
+                            creditOption: 'opt1',
+                            engStatusPriorToRS: nextPriorStatus
+                          });
+                        }}
+                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
                           onboardingData.creditOption === 'opt1'
-                            ? 'bg-indigo-950/20 border-indigo-500/30 text-white font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                            : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
+                            ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
                         }`}
                       >
                         <div>
-                          <p className="font-semibold text-white">Option 1: Started with ENG101</p>
-                          <p className="text-[10px] text-zinc-550 mt-0.5">Assigns ENG101 (English Fundamentals) to Semester 1</p>
+                          <p className="font-semibold text-slate-100">Option 1: Started with ENG101</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Assigns ENG101 ({COURSES.find(c => c.code === "ENG101")?.title}) to Semester 1</p>
                         </div>
                         {onboardingData.creditOption === 'opt1' && <Check className="h-4 w-4 text-indigo-400" />}
                       </button>
 
                       <button
-                        onClick={() => setOnboardingData({ ...onboardingData, creditOption: 'opt2' })}
-                        className={`w-full p-3 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                        onClick={() => {
+                          const nextPriorStatus = (onboardingData.engStatusPriorToRS === 'caseA' || onboardingData.engStatusPriorToRS === 'caseD')
+                            ? onboardingData.engStatusPriorToRS
+                            : null;
+                          setOnboardingData({
+                            ...onboardingData,
+                            creditOption: 'opt2',
+                            engStatusPriorToRS: nextPriorStatus
+                          });
+                        }}
+                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
                           onboardingData.creditOption === 'opt2'
-                            ? 'bg-indigo-950/20 border-indigo-500/30 text-white font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                            : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
+                            ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
                         }`}
                       >
                         <div>
-                          <p className="font-semibold text-white">Option 2: Started with ENG102</p>
-                          <p className="text-[10px] text-zinc-555 mt-0.5">Assigns ENG102 (Composition I) to Semester 1</p>
+                          <p className="font-semibold text-slate-100">Option 2: Started with ENG102</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Assigns ENG102 ({COURSES.find(c => c.code === "ENG102")?.title}) to Semester 1</p>
                         </div>
                         {onboardingData.creditOption === 'opt2' && <Check className="h-4 w-4 text-indigo-400" />}
                       </button>
@@ -2341,7 +2397,7 @@ export default function Home() {
                 <button
                   onClick={() => setWizardStep(2)}
                   disabled={!onboardingData.pathway}
-                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg transition"
+                  className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-lg transition"
                 >
                   Continue
                 </button>
@@ -2352,8 +2408,8 @@ export default function Home() {
             {wizardStep === 2 && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-white">RS & English Placement Engine</h2>
-                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                  <h2 className="text-xl font-bold tracking-tight text-slate-100">RS & English Placement Engine</h2>
+                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                     Set up your Residential Semester. The engine will evaluate prerequisites to auto-populate the RS card.
                   </p>
                 </div>
@@ -2369,8 +2425,8 @@ export default function Home() {
                           onClick={() => setOnboardingData({ ...onboardingData, rsTerm: term })}
                           className={`p-3 rounded-xl border text-xs font-semibold text-center transition-all duration-300 ${
                             onboardingData.rsTerm === term
-                              ? 'bg-indigo-950/20 border-indigo-500/30 text-indigo-400 font-bold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                              : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
+                              ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                              : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
                           }`}
                         >
                           {term}
@@ -2386,7 +2442,7 @@ export default function Home() {
                       <select
                         value={onboardingData.startingTerm}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
-                        className="w-full bg-slate-900/60 border border-indigo-500/20 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition cursor-pointer"
+                        className="w-full bg-slate-900/60 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
                       >
                         <option value="Spring">Spring</option>
                         <option value="Summer">Summer</option>
@@ -2396,7 +2452,7 @@ export default function Home() {
                       <select
                         value={onboardingData.startingYear}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingYear: parseInt(e.target.value) })}
-                        className="w-full bg-slate-900/60 border border-indigo-500/20 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition cursor-pointer"
+                        className="w-full bg-slate-900/60 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
                       >
                         {Array.from({ length: 11 }, (_, i) => 2020 + i).map(year => (
                           <option key={year} value={year}>{year}</option>
@@ -2407,69 +2463,91 @@ export default function Home() {
 
                   {/* Select English Prior Status */}
                   <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">English course status PRIOR to attending RS</label>
-                    <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">
+                      {onboardingData.creditOption === 'opt2' ? "ENG102 course status PRIOR to attending RS" : "English course status PRIOR to attending RS"}
+                    </label>
+                    <div className="space-y-2.5">
                       
-                      <button
-                        onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
-                        className={`w-full p-3 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
-                          onboardingData.engStatusPriorToRS === 'caseA'
-                            ? 'bg-indigo-950/20 border-indigo-500/30 text-white font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                            : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
-                        }`}
-                      >
-                        <div>
-                          <p className="text-zinc-200 font-semibold text-xs">Passed ENG101, but NOT ENG102 before RS</p>
-                          <p className="text-[9px] text-indigo-400 mt-0.5">RS card will auto-assign: ENG102 as your 4th course</p>
-                        </div>
-                        {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-4 w-4 text-indigo-400" />}
-                      </button>
- 
-                      <button
-                        onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseB' })}
-                        className={`w-full p-3 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
-                          onboardingData.engStatusPriorToRS === 'caseB'
-                            ? 'bg-indigo-950/20 border-indigo-500/30 text-white font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                            : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
-                        }`}
-                      >
-                        <div>
-                          <p className="text-zinc-200 font-semibold text-xs">Passed ENG101 and ENG102 before RS</p>
-                          <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
-                        </div>
-                        {onboardingData.engStatusPriorToRS === 'caseB' && <Check className="h-4 w-4 text-indigo-400" />}
-                      </button>
- 
-                      <button
-                        onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseC' })}
-                        className={`w-full p-3 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
-                          onboardingData.engStatusPriorToRS === 'caseC'
-                            ? 'bg-indigo-950/20 border-indigo-500/30 text-white font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                            : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
-                        }`}
-                      >
-                        <div>
-                          <p className="text-zinc-200 font-semibold text-xs">Failed ENG101 before RS</p>
-                          <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
-                        </div>
-                        {onboardingData.engStatusPriorToRS === 'caseC' && <Check className="h-4 w-4 text-indigo-400" />}
-                      </button>
- 
-                      <button
-                        onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseD' })}
-                        className={`w-full p-3 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
-                          onboardingData.engStatusPriorToRS === 'caseD'
-                            ? 'bg-indigo-950/20 border-indigo-500/30 text-white font-semibold shadow-[0_0_12px_rgba(139,92,246,0.1)]'
-                            : 'bg-slate-900/40 border-indigo-500/10 text-zinc-400 hover:border-indigo-500/20 hover:text-zinc-200'
-                        }`}
-                      >
-                        <div>
-                          <p className="text-zinc-200 font-semibold text-xs">Started with ENG102 and completed before RS</p>
-                          <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
-                        </div>
-                        {onboardingData.engStatusPriorToRS === 'caseD' && <Check className="h-4 w-4 text-indigo-400" />}
-                      </button>
- 
+                      {onboardingData.creditOption === 'opt2' ? (
+                        <>
+                          <button
+                            onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                              onboardingData.engStatusPriorToRS === 'caseA'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-slate-100 font-semibold text-xs">Have not completed ENG102 before RS (will take ENG102 during RS)</p>
+                              <p className="text-[9px] text-indigo-400 mt-0.5">RS card will auto-assign: ENG102 as your 4th course</p>
+                            </div>
+                            {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-4 w-4 text-indigo-400" />}
+                          </button>
+
+                          <button
+                            onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseD' })}
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                              onboardingData.engStatusPriorToRS === 'caseD'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-slate-100 font-semibold text-xs">Completed ENG102 before RS</p>
+                              <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
+                            </div>
+                            {onboardingData.engStatusPriorToRS === 'caseD' && <Check className="h-4 w-4 text-indigo-400" />}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                              onboardingData.engStatusPriorToRS === 'caseA'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-slate-100 font-semibold text-xs">Passed ENG101, but NOT ENG102 before RS</p>
+                              <p className="text-[9px] text-indigo-400 mt-0.5">RS card will auto-assign: ENG102 as your 4th course</p>
+                            </div>
+                            {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-4 w-4 text-indigo-400" />}
+                          </button>
+
+                          <button
+                            onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseB' })}
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                              onboardingData.engStatusPriorToRS === 'caseB'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-slate-100 font-semibold text-xs">Passed ENG101 and ENG102 before RS</p>
+                              <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
+                            </div>
+                            {onboardingData.engStatusPriorToRS === 'caseB' && <Check className="h-4 w-4 text-indigo-400" />}
+                          </button>
+
+                          <button
+                            onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseC' })}
+                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between ${
+                              onboardingData.engStatusPriorToRS === 'caseC'
+                                ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-slate-100 font-semibold text-xs">Failed ENG101 before RS</p>
+                              <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
+                            </div>
+                            {onboardingData.engStatusPriorToRS === 'caseC' && <Check className="h-4 w-4 text-indigo-400" />}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2477,7 +2555,7 @@ export default function Home() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setWizardStep(1)}
-                    className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-900/60 border border-indigo-500/15 text-zinc-300 font-semibold rounded-xl transition"
+                    className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-900/60 border border-indigo-500/15 text-slate-100 font-semibold rounded-xl transition"
                   >
                     Back
                   </button>
@@ -2488,7 +2566,7 @@ export default function Home() {
                       }
                     }}
                     disabled={!onboardingData.engStatusPriorToRS}
-                    className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg transition"
+                    className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-lg transition"
                   >
                     Next Step
                   </button>
@@ -2500,20 +2578,20 @@ export default function Home() {
             {wizardStep === 3 && (
               <div className="space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-white">Generate Your Study Plan</h2>
-                  <p className="text-zinc-400 text-xs mt-1">Review your generated curriculum layout summary:</p>
+                  <h2 className="text-xl font-bold tracking-tight text-slate-100">Generate Your Study Plan</h2>
+                  <p className="text-slate-400 text-xs mt-1">Review your generated curriculum layout summary:</p>
                 </div>
 
                 <div className="bg-slate-900/40 border border-indigo-500/10 p-5 rounded-xl space-y-4 text-xs shadow-[0_0_15px_rgba(99,102,241,0.03)]">
-                  <div className="flex justify-between border-b border-white/5 pb-2.5">
-                    <span className="text-zinc-500">Starting Pathway:</span>
-                    <span className="text-white font-semibold capitalize">
+                  <div className="flex justify-between border-b border-slate-800/40 pb-2.5">
+                    <span className="text-slate-400">Starting Pathway:</span>
+                    <span className="text-slate-100 font-semibold capitalize">
                       {onboardingData.pathway === 'foundation' ? "Non-Credit Foundation" : "Direct Credit Course"}
                     </span>
                   </div>
 
-                  <div className="flex justify-between border-b border-white/5 pb-2.5">
-                    <span className="text-zinc-500">1st Semester Course:</span>
+                  <div className="flex justify-between border-b border-slate-800/40 pb-2.5">
+                    <span className="text-slate-400">1st Semester Course:</span>
                     <span className="text-indigo-400 font-semibold">
                       {onboardingData.pathway === 'foundation' 
                         ? ([
@@ -2526,13 +2604,13 @@ export default function Home() {
                     </span>
                   </div>
 
-                  <div className="flex justify-between border-b border-white/5 pb-2.5">
-                    <span className="text-zinc-500">RS Semester Card:</span>
-                    <span className="text-white font-semibold">{onboardingData.rsTerm} location</span>
+                  <div className="flex justify-between border-b border-slate-800/40 pb-2.5">
+                    <span className="text-slate-400">RS Semester Card:</span>
+                    <span className="text-slate-100 font-semibold">{onboardingData.rsTerm} location</span>
                   </div>
 
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">RS Course Population:</span>
+                    <span className="text-slate-400">RS Course Population:</span>
                     <span className="text-indigo-400 font-semibold">
                       {onboardingData.engStatusPriorToRS === 'caseA' ? "EMB101 + HUM103 + BNG103 + ENG102" : "EMB101 + HUM103 + BNG103 + BU201"}
                     </span>
@@ -2542,13 +2620,13 @@ export default function Home() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setWizardStep(2)}
-                    className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-900/60 border border-indigo-500/15 text-zinc-300 font-semibold rounded-xl transition"
+                    className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-900/60 border border-indigo-500/15 text-slate-100 font-semibold rounded-xl transition"
                   >
                     Back
                   </button>
                   <button
                     onClick={generateInitialPlan}
-                    className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg transition"
+                    className="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-slate-100 font-semibold rounded-xl shadow-lg transition"
                   >
                     Generate Plan
                   </button>
@@ -2560,14 +2638,14 @@ export default function Home() {
       </div>
       ) : (
         /* Actual App Dashboard */
-        <div className="flex-1 w-full max-w-[1600px] mx-auto px-4 lg:px-6 py-4 flex flex-col">
+        <div className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 flex flex-col">
           <div className="flex-1 flex flex-col lg:flex-row gap-6">
             
             {/* A. LEFT SIDEBAR: Degree Progress & Statistics */}
             <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-48px)] flex flex-col gap-6 lg:overflow-y-auto pr-2 custom-scrollbar pb-6">
               
               {/* 1. Degree Standing Card */}
-              <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
+              <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
                 <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-500/[0.02] rounded-full blur-2xl pointer-events-none" />
                 
                 <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2 mb-4">
@@ -2579,10 +2657,10 @@ export default function Home() {
                   {/* Credit Progress */}
                   <div>
                     <div className="flex justify-between text-[11px] mb-1.5">
-                      <span className="text-zinc-400 font-medium">Completed Credits</span>
-                      <span className="text-white font-extrabold">{cumulativeStats.completedCredits} / 136 Cr</span>
+                      <span className="text-slate-400 font-medium">Completed Credits</span>
+                      <span className="text-slate-100 font-extrabold">{cumulativeStats.completedCredits} / 136 Cr</span>
                     </div>
-                    <div className="h-3 w-full bg-zinc-900 border border-zinc-800 rounded-full overflow-hidden p-0.5">
+                    <div className="h-3 w-full bg-zinc-900 border border-slate-800 rounded-full overflow-hidden p-0.5">
                       <div 
                         style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
                         className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
@@ -2594,17 +2672,17 @@ export default function Home() {
 
                 {/* 2. Middle Section: Cumulative CGPA display, Probation Badge, and the Target CGPA Solver widget */}
                 {mode === 'gpa' && (
-                  <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
+                  <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
                     <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
                       <TrendingUp className="h-4 w-4" />
                       GPA Dashboard
                     </h2>
 
                     {/* Cumulative CGPA Box */}
-                    <div className="bg-zinc-900/15 border border-zinc-900/40 p-5 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className="bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(99,102,241,0.03)]">
                       <div>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Cumulative CGPA</p>
-                        <p className="text-3xl lg:text-4xl font-extrabold text-white mt-1 tracking-tight">
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Cumulative CGPA</p>
+                        <p className="text-3xl lg:text-4xl font-extrabold text-slate-100 mt-1 tracking-tight">
                           {cumulativeStats.cgpa.toFixed(2)}
                         </p>
                       </div>
@@ -2622,16 +2700,16 @@ export default function Home() {
                     </div>
 
                     {/* Target CGPA Solver Widget */}
-                    <div className="bg-zinc-900/15 border border-zinc-900/40 p-5 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className="bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
                             <Target className="h-3.5 w-3.5" />
                           </div>
-                          <p className="text-xs font-semibold tracking-wider text-slate-300 uppercase">Target Solver</p>
+                          <p className="text-xs font-semibold tracking-wider text-slate-100 uppercase">Target Solver</p>
                         </div>
                         
-                        <div className="inline-flex items-center gap-1.5 bg-slate-900/90 border border-indigo-500/30 rounded-lg px-3 py-1.5 shadow-inner">
+                        <div className="inline-flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2 shadow-inner">
                           <span className="text-xs text-slate-400">Target:</span>
                           <input
                             type="number"
@@ -2640,41 +2718,41 @@ export default function Home() {
                             max="4.0"
                             value={targetCgpa}
                             onChange={(e) => setTargetCgpa(e.target.value)}
-                            className="w-12 text-sm font-semibold text-white bg-transparent focus:outline-none focus:text-indigo-300 text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            className="w-12 text-sm font-semibold text-slate-100 bg-transparent focus:outline-none focus:text-indigo-300 text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                           />
                         </div>
                       </div>
 
                       {targetSolverResult.isAchieved ? (
                         <div className="text-xs leading-relaxed text-slate-350">
-                          🎉 Graduation requirements met! Your final CGPA is <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
+                          🎉 Graduation requirements met! Your final CGPA is <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
                         </div>
                       ) : targetSolverResult.requiredGpa > 4.00 ? (
                         <div className="bg-rose-950/15 border border-rose-900/30 p-3 rounded-lg text-rose-400 space-y-1 text-xs leading-relaxed">
                           <p className="font-bold flex items-center gap-1 text-[11px] uppercase tracking-wider">⚠️ Out of Reach</p>
-                          <p>This target is mathematically out of reach. If you score a flat 4.00 (all A's) across your remaining credits, your maximum possible graduation CGPA will be <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.</p>
+                          <p>This target is mathematically out of reach. If you score a flat 4.00 (all A's) across your remaining credits, your maximum possible graduation CGPA will be <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.</p>
                         </div>
                       ) : (
-                        <div className="text-xs leading-relaxed text-slate-300">
-                          To reach <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetCgpa}</span>, you need to maintain an average semester grade of <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.requiredGpa.toFixed(2)}</span> (approx. <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.letterEquivalent}</span>) over your remaining <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{targetSolverResult.remainingCredits} credits</span>.
+                        <div className="text-xs leading-relaxed text-slate-100">
+                          To reach <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetCgpa}</span>, you need to maintain an average semester grade of <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.requiredGpa.toFixed(2)}</span> (approx. <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.letterEquivalent}</span>) over your remaining <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.remainingCredits} credits</span>.
                         </div>
                       )}
                     </div>
 
                     {/* Repeat ROI Analyzer Widget */}
-                    <div className="bg-zinc-900/15 border border-zinc-900/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)]">
-                      <div className="p-5 flex items-center justify-between border-b border-white/5 bg-zinc-950/20">
+                    <div className="bg-zinc-900/15 border border-slate-800/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                      <div className="p-5 flex items-center justify-between border-b border-slate-800/40 bg-zinc-950/20">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
                             <TrendingUp className="h-3.5 w-3.5" />
                           </div>
-                          <p className="text-xs font-semibold tracking-wider text-slate-300 uppercase">Repeat ROI Analyzer</p>
+                          <p className="text-xs font-semibold tracking-wider text-slate-100 uppercase">Repeat ROI Analyzer</p>
                         </div>
                         
                         <button
                           type="button"
                           onClick={() => setRoiExpanded(!roiExpanded)}
-                          className="text-zinc-500 font-bold text-[10px] bg-zinc-900 px-2 py-1 rounded border border-zinc-800 flex items-center gap-1.5 hover:text-indigo-400 transition"
+                          className="text-slate-400 font-bold text-[10px] bg-zinc-900 px-2 py-1 rounded border border-slate-800 flex items-center gap-1.5 hover:text-indigo-400 transition"
                         >
                           <span>{roiRecommendations.length} courses</span>
                           {roiExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -2682,25 +2760,25 @@ export default function Home() {
                       </div>
 
                       {roiExpanded && (
-                        <div className="p-5 border-t border-zinc-850 bg-zinc-950/10 space-y-3">
+                        <div className="p-5 border-t border-slate-800 bg-zinc-950/10 space-y-3">
                           {roiRecommendations.length === 0 ? (
-                            <div className="text-xs text-zinc-500 py-2 leading-relaxed">
+                            <div className="text-xs text-slate-400 py-2 leading-relaxed">
                               No C- to B- range courses found to repeat.
                             </div>
                           ) : (
                             <div className="space-y-3">
                               <div className="bg-indigo-950/20 border border-indigo-900/30 p-3 rounded-lg text-indigo-350 text-xs leading-relaxed">
-                                <span className="font-bold text-white">Biggest Impact:</span> Repeating <span className="font-bold text-white">{roiRecommendations[0].code}</span> (Current: <span className="font-semibold text-zinc-400">{roiRecommendations[0].currentGrade}</span>) to an A will boost your overall CGPA by <span className="font-extrabold text-indigo-400">+{roiRecommendations[0].delta.toFixed(3)}</span> points.
+                                <span className="font-bold text-slate-100">Biggest Impact:</span> Repeating <span className="font-bold text-slate-100">{roiRecommendations[0].code}</span> (Current: <span className="font-semibold text-slate-400">{roiRecommendations[0].currentGrade}</span>) to an A will boost your overall CGPA by <span className="font-extrabold text-indigo-400">+{roiRecommendations[0].delta.toFixed(3)}</span> points.
                               </div>
 
                               <div className="space-y-2">
-                                <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Top 3 Optimization Targets</p>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Top 3 Optimization Targets</p>
                                 {roiRecommendations.slice(0, 3).map((item, idx) => (
-                                  <div key={item.code} className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-900 last:border-0">
+                                  <div key={item.code} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800 last:border-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[9px] font-bold text-zinc-550 w-3">{idx + 1}.</span>
-                                      <span className="font-bold text-zinc-200">{item.code}</span>
-                                      <span className="text-[10px] text-zinc-550 bg-zinc-900 px-1 rounded border border-zinc-855">{item.currentGrade}</span>
+                                      <span className="text-[9px] font-bold text-slate-400 w-3">{idx + 1}.</span>
+                                      <span className="font-bold text-slate-100">{item.code}</span>
+                                      <span className="text-[10px] text-slate-400 bg-zinc-900 px-1 rounded border border-slate-800">{item.currentGrade}</span>
                                     </div>
                                     <div className="text-right text-[11px]">
                                       <span className="text-indigo-400 font-bold">+{item.delta.toFixed(3)} CGPA</span>
@@ -2718,7 +2796,7 @@ export default function Home() {
                 )}
 
                 {/* 3. Bottom Section: Category Requirements */}
-                <div className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
+                <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
                   <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
                     <BookOpen className="h-4 w-4" />
                     Category Requirements
@@ -2729,13 +2807,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('core')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-350 font-semibold">Program Core (Mandatory)</span>
-                        <span className="text-zinc-500 font-extrabold">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
+                        <span className="text-slate-400 font-extrabold">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.coreCompleted / curriculumProgress.coreTotal) * 100}%` }}
                           className="h-full bg-indigo-500 rounded-full transition-all duration-300"
@@ -2745,13 +2823,13 @@ export default function Home() {
 
                     {/* Capstone Thesis */}
                     <div
-                      className="w-full bg-zinc-900/15 border border-zinc-900/40 rounded-xl p-3.5 flex flex-col gap-2"
+                      className="w-full bg-zinc-900/15 border border-slate-800/40 rounded-xl p-3.5 flex flex-col gap-2"
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">Capstone Thesis (CSE400)</span>
-                        <span className="text-zinc-500 font-extrabold">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
+                        <span className="text-slate-400 font-extrabold">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.thesisCompleted / curriculumProgress.thesisTotal) * 100}%` }}
                           className="h-full bg-purple-500/80 rounded-full transition-all duration-300"
@@ -2763,13 +2841,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('schoolCore')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">School Core (Math &amp; Sciences)</span>
-                        <span className="text-zinc-500 font-extrabold">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
+                        <span className="text-slate-400 font-extrabold">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.schoolCoreCompleted / curriculumProgress.schoolCoreTotal) * 100}%` }}
                           className="h-full bg-purple-500 rounded-full transition-all duration-300"
@@ -2781,13 +2859,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('electives')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">CSE Major Electives</span>
-                        <span className="text-zinc-500 font-extrabold">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
+                        <span className="text-slate-400 font-extrabold">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.electiveCompleted / curriculumProgress.electiveTotal) * 100}%` }}
                           className="h-full bg-indigo-400 rounded-full transition-all duration-300"
@@ -2797,20 +2875,20 @@ export default function Home() {
                   </div>
 
                   {/* 4. GenEd Streams */}
-                  <div className="pt-4 border-t border-zinc-900/60 space-y-3">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">GenEd Streams Progress (39 Cr Total)</p>
+                  <div className="pt-4 border-t border-slate-800/60 space-y-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">GenEd Streams Progress (39 Cr Total)</p>
                     
                     {/* Stream 1: Writing */}
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream1')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-400">GenEd Stream 1 (Writing Comprehension)</span>
-                        <span className="text-zinc-550 font-extrabold">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
+                        <span className="text-slate-400">GenEd Stream 1 (Writing Comprehension)</span>
+                        <span className="text-slate-400 font-extrabold">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.stream1Completed / curriculumProgress.stream1Total) * 100}%` }}
                           className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
@@ -2822,13 +2900,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream2')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-400">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
+                        <span className="text-slate-400">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
                         <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream2Completed} / {curriculumProgress.stream2Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.stream2Completed / curriculumProgress.stream2Total) * 100}%` }}
                           className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
@@ -2840,13 +2918,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream3')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-400">GenEd Stream 3 (Arts &amp; Humanities)</span>
+                        <span className="text-slate-400">GenEd Stream 3 (Arts &amp; Humanities)</span>
                         <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream3Completed} / {curriculumProgress.stream3Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.stream3Completed / curriculumProgress.stream3Total) * 100}%` }}
                           className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
@@ -2858,13 +2936,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream4')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-400">GenEd Stream 4 (Social Sciences)</span>
+                        <span className="text-slate-400">GenEd Stream 4 (Social Sciences)</span>
                         <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream4Completed} / {curriculumProgress.stream4Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.stream4Completed / curriculumProgress.stream4Total) * 100}%` }}
                           className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
@@ -2876,13 +2954,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream5')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-400">GenEd Stream 5 (Communities / CST)</span>
+                        <span className="text-slate-400">GenEd Stream 5 (Communities / CST)</span>
                         <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream5Completed} / {curriculumProgress.stream5Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.stream5Completed / curriculumProgress.stream5Total) * 100}%` }}
                           className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
@@ -2894,13 +2972,13 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('freeGenEd')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-zinc-900/40 hover:bg-zinc-900/30 hover:border-zinc-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
                     >
                       <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-400">GenEd Electives (Free Choice)</span>
+                        <span className="text-slate-400">GenEd Electives (Free Choice)</span>
                         <span className="text-zinc-555 font-extrabold">{curriculumProgress.freeGenEdCredits} / {curriculumProgress.freeGenEdTotal} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-955 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.freeGenEdCredits / curriculumProgress.freeGenEdTotal) * 100}%` }}
                           className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
@@ -2915,20 +2993,20 @@ export default function Home() {
           <main className="flex-1 lg:overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-6">
             
             {/* Semester timelines header */}
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-indigo-400" />
-                <h2 className="text-base font-bold tracking-tight text-white">Curriculum Plan Semester Cards</h2>
+                <h2 className="text-base font-bold tracking-tight text-slate-100">Curriculum Plan Semester Cards</h2>
               </div>
               <div className="flex items-center gap-2">
                 {/* View Switcher Toggle (Hidden on mobile) */}
-                <div className="hidden md:flex items-center bg-zinc-950 border border-zinc-800 rounded-lg p-0.5 shadow-inner mr-2">
+                <div className="hidden md:flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner mr-2">
                   <button
                     onClick={() => handleToggleViewMode("list")}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       currentLayout === "list"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "text-zinc-400 hover:text-zinc-200"
+                        ? "bg-indigo-600 text-slate-100 shadow-sm"
+                        : "text-slate-400 hover:text-slate-100"
                     }`}
                   >
                     <List className="h-3.5 w-3.5" />
@@ -2938,8 +3016,8 @@ export default function Home() {
                     onClick={() => handleToggleViewMode("kanban")}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                       currentLayout === "kanban"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "text-zinc-400 hover:text-zinc-200"
+                        ? "bg-indigo-600 text-slate-100 shadow-sm"
+                        : "text-slate-400 hover:text-slate-100"
                     }`}
                   >
                     <Columns className="h-3.5 w-3.5" />
@@ -2949,13 +3027,13 @@ export default function Home() {
 
                 <button
                   onClick={handleToggleAllCollapse}
-                  className="bg-zinc-900/60 border border-zinc-800/80 hover:bg-indigo-500/10 hover:border-indigo-500/20 text-zinc-300 hover:text-white text-xs font-semibold px-3 py-2 rounded-lg transition"
+                  className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-100 hover:text-slate-100 text-xs font-semibold px-3 py-2 rounded-lg transition"
                 >
                   {isAnyExpanded ? "Collapse All" : "Expand All"}
                 </button>
                 <button
                   onClick={handleAddSemester}
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md transition"
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-slate-100 text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md transition"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Add Semester</span>
@@ -2988,24 +3066,24 @@ export default function Home() {
                       currentLayout === 'kanban' 
                         ? "w-[340px] min-w-[340px] flex-shrink-0 snap-start scale-y-[-1]" 
                         : ""
-                    } bg-zinc-955/70 border rounded-2xl overflow-visible shadow-xl backdrop-blur-md hover:border-zinc-800 transition-all duration-300 ${
+                    } bg-zinc-900/70 border rounded-xl overflow-visible shadow-xl backdrop-blur-md hover:border-slate-800 transition-all duration-300 ${
                       draggingCourseCode && dragOverSemesterId === sem.id 
                         ? "border-dashed border-2 border-indigo-500 bg-indigo-500/5 shadow-[0_0_20px_rgba(99,102,241,0.15)]" 
-                        : "border-zinc-850"
+                        : "border-slate-800"
                     }`}
                   >
                                   {/* Semester Card Header */}
-                    <div className={`bg-white/[0.02] px-5 py-4 flex flex-wrap items-center justify-between gap-3 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-white/5"}`}>
+                    <div className={`bg-white/[0.02] px-6 py-4 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-slate-800/40"}`}>
                       <div className="flex items-center gap-2.5 flex-wrap">
                         <span className="h-2 w-2 rounded-full bg-purple-500 shadow-[0_0_6px_#8b5cf6]" />
-                        <h3 className="font-bold text-sm text-white tracking-tight flex flex-wrap items-center gap-2">
+                        <h3 className="font-bold text-sm text-slate-100 tracking-tight flex flex-wrap items-center gap-2">
                           <span>{sem.isRS ? "Residential Semester (RS)" : `Semester ${semIdx + 1}`}</span>
                           <span className="text-zinc-700 font-normal">|</span>
                           <div className="flex items-center gap-1.5">
                             <select
                               value={sem.term || intake?.term || 'Spring'}
                               onChange={(e) => handleOverrideIntake(sem.id, e.target.value as any, sem.year || intake?.year || onboardingData.startingYear)}
-                              className="bg-zinc-955/40 border border-white/5 hover:border-white/10 text-xs text-zinc-200 rounded-lg px-3 py-1.5 outline-none cursor-pointer focus:border-purple-500 font-semibold transition"
+                              className="bg-zinc-900/40 border border-slate-800/40 hover:border-slate-800/60 text-xs text-slate-100 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-purple-500 font-semibold transition"
                             >
                               <option value="Spring">Spring</option>
                               <option value="Summer">Summer</option>
@@ -3014,7 +3092,7 @@ export default function Home() {
                             <select
                               value={sem.year || intake?.year || 2025}
                               onChange={(e) => handleOverrideIntake(sem.id, sem.term || intake?.term || 'Spring', parseInt(e.target.value))}
-                              className="bg-zinc-955/40 border border-white/5 hover:border-white/10 text-xs text-zinc-200 rounded-lg px-3 py-1.5 outline-none cursor-pointer focus:border-purple-500 font-semibold transition"
+                              className="bg-zinc-900/40 border border-slate-800/40 hover:border-slate-800/60 text-xs text-slate-100 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-purple-500 font-semibold transition"
                             >
                               {Array.from({ length: 101 }, (_, i) => 2001 + i).map(year => (
                                 <option key={year} value={year}>{year}</option>
@@ -3023,13 +3101,13 @@ export default function Home() {
                           </div>
                         </h3>
                         {sem.isRS ? (
-                          <span className="text-[9px] font-bold bg-purple-500/10 border border-purple-500/20 text-purple-400 px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
+                          <span className="text-[9px] font-bold bg-purple-500/10 border border-slate-800 text-purple-400 px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
                             RS Campus
                           </span>
                         ) : (
                           <button
                             onClick={() => handleMarkAsRS(sem.id)}
-                            className="text-[9px] font-bold bg-zinc-955/40 border border-white/5 hover:border-white/10 text-zinc-400 hover:text-zinc-200 px-2.5 py-1 rounded-md tracking-wider uppercase transition"
+                            className="text-[9px] font-bold bg-zinc-900/40 border border-slate-800/40 hover:border-slate-800/60 text-slate-400 hover:text-slate-100 px-2.5 py-1 rounded-md tracking-wider uppercase transition"
                           >
                             Mark as RS
                           </button>
@@ -3038,16 +3116,16 @@ export default function Home() {
 
                       <div className="flex items-center gap-4 text-xs">
                         <div className="flex items-center gap-3">
-                          <span className="text-zinc-500">Credits: <span className="text-zinc-300 font-semibold">{stats?.credits ?? 0}</span></span>
+                          <span className="text-slate-400">Credits: <span className="text-slate-100 font-semibold">{stats?.credits ?? 0}</span></span>
                           {mode === 'gpa' && stats?.gpa != null && (
-                            <span className="text-zinc-500">Semester GPA: <span className="text-indigo-400 font-bold">{stats.gpa.toFixed(2)}</span></span>
+                            <span className="text-slate-400">Semester GPA: <span className="text-indigo-400 font-bold">{stats.gpa.toFixed(2)}</span></span>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-1.5 pl-3 border-l border-zinc-800">
+                        <div className="flex items-center gap-1.5 pl-3 border-l border-slate-800">
                           <button
                             onClick={() => setActiveCourseSelectorSemesterId(sem.id)}
-                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition"
+                            className="bg-zinc-800 hover:bg-zinc-700 text-slate-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition"
                           >
                             <PlusCircle className="h-3.5 w-3.5" />
                             <span>Add Course</span>
@@ -3064,7 +3142,7 @@ export default function Home() {
                               });
                               updateSemesters(updated);
                             }}
-                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition"
+                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-slate-800/60 flex items-center justify-center text-slate-100 hover:text-slate-100 transition"
                             title={sem.isCollapsed ? "Expand Semester" : "Minimize Semester"}
                           >
                             {sem.isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
@@ -3072,7 +3150,7 @@ export default function Home() {
 
                           <button
                             onClick={() => handleDeleteSemester(sem.id)}
-                            className="text-zinc-600 hover:text-rose-400 p-1.5 rounded-lg transition"
+                            className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg transition"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -3085,7 +3163,7 @@ export default function Home() {
                       <div className="p-4 divide-y divide-zinc-800/60">
                       
                       {sem.courses.length === 0 && (
-                        <div className="py-6 text-center text-zinc-500 text-xs">
+                        <div className="py-6 text-center text-slate-400 text-xs">
                           No courses scheduled in this semester.
                         </div>
                       )}
@@ -3120,8 +3198,8 @@ export default function Home() {
                             }}
                             className={`flex justify-between gap-3 text-xs group transition-all duration-200 ${
                               currentLayout === 'kanban' 
-                                ? "flex-col p-3.5 border border-zinc-800/85 rounded-xl bg-zinc-900/45 hover:bg-zinc-900/70 hover:border-zinc-700/60 shadow-md mb-3 cursor-grab" 
-                                : "flex-col md:flex-row md:items-center py-3.5 border-b border-zinc-800/40 last:border-b-0 relative"
+                                ? "flex-col p-3.5 border border-slate-800/85 rounded-xl bg-zinc-900/45 hover:bg-zinc-900/70 hover:border-zinc-700/60 shadow-md mb-3 cursor-grab" 
+                                : "flex-col md:flex-row md:items-center py-3.5 border-b border-slate-800/40 last:border-b-0 relative"
                             } ${
                               draggingCourseCode === c.code 
                                 ? currentLayout === 'kanban'
@@ -3145,7 +3223,7 @@ export default function Home() {
                                   <select
                                     value={c.grade}
                                     onChange={(e) => handleGradeChange(sem.id, c.code, e.target.value)}
-                                    className="bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-200 rounded px-1.5 py-0.5 focus:border-indigo-500 outline-none cursor-pointer"
+                                    className="bg-zinc-900 border border-slate-800 text-[10px] text-slate-100 rounded px-1.5 py-0.5 focus:border-indigo-500 outline-none cursor-pointer"
                                   >
                                     <option value="">Grade</option>
                                     {Object.keys(GRADING_SCALE).map(g => (
@@ -3163,9 +3241,9 @@ export default function Home() {
 
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-extrabold text-sm text-zinc-200 tracking-tight">{c.code}</span>
-                                  <span className="text-zinc-400 font-medium">{courseDetails?.title ?? "Custom Elective Course"}</span>
-                                  <span className="text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded font-mono">
+                                  <span className="font-extrabold text-sm text-slate-100 tracking-tight">{c.code}</span>
+                                  <span className="text-slate-400 font-medium">{courseDetails?.title ?? "Custom Elective Course"}</span>
+                                  <span className="text-[10px] text-slate-400 bg-zinc-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono">
                                     {(courseDetails?.credits ?? 3)} Cr
                                   </span>
                                   {renderMandatoryBadge(c.code)}
@@ -3218,7 +3296,7 @@ export default function Home() {
                                       e.target.value = ""; // Reset
                                     }
                                   }}
-                                  className="bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-[10px] text-zinc-400 rounded-lg px-2 py-1 cursor-pointer transition focus:outline-none"
+                                  className="bg-zinc-900 hover:bg-zinc-800 border border-slate-800 text-[10px] text-slate-400 rounded-lg px-2 py-1 cursor-pointer transition focus:outline-none"
                                 >
                                   <option value="">Move To...</option>
                                   {semesters.filter(s => s.id !== sem.id).map(s => {
@@ -3242,7 +3320,7 @@ export default function Home() {
                                   setSwappingCourseCode(c.code);
                                 }}
                                 title="Swap Course"
-                                className="text-zinc-600 hover:text-indigo-400 p-1.5 rounded transition"
+                                className="text-slate-400 hover:text-indigo-400 p-1.5 rounded transition"
                               >
                                 <ArrowRightLeft className="h-3.5 w-3.5" />
                               </button>
@@ -3250,7 +3328,7 @@ export default function Home() {
                               {/* Remove Course button */}
                               <button
                                 onClick={() => handleRemoveCourse(sem.id, c.code)}
-                                className="text-zinc-600 hover:text-rose-400 p-1.5 rounded transition"
+                                className="text-slate-400 hover:text-rose-400 p-1.5 rounded transition"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -3280,15 +3358,15 @@ export default function Home() {
       {/* 4. Search and Add Course Combobox Overlay */}
       {activeCourseSelectorSemesterId !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f0f13] border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="bg-[#0f0f13] border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             
             {/* Combobox Header */}
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-sm text-white">
+                <h3 className="font-bold text-sm text-slate-100">
                   {swappingCourseCode ? `Swap Course: ${swappingCourseCode}` : "Add Course to Semester"}
                 </h3>
-                <p className="text-[10px] text-zinc-500 mt-0.5">
+                <p className="text-[10px] text-slate-400 mt-0.5">
                   {swappingCourseCode 
                     ? "Select a new course to swap into this slot" 
                     : "Select a course to add to your semester timeline plan"}
@@ -3300,20 +3378,20 @@ export default function Home() {
                   setSwappingCourseCode(null);
                   setCourseSearchQuery("");
                 }} 
-                className="text-zinc-400 hover:text-white p-1 rounded"
+                className="text-slate-400 hover:text-slate-100 p-1 rounded"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Combobox Filter tabs and Search */}
-            <div className="p-4 bg-zinc-900/30 border-b border-zinc-800 space-y-3">
+            <div className="p-4 bg-zinc-900/30 border-b border-slate-800 space-y-3">
               <input
                 type="text"
                 placeholder="Search by code (e.g. CSE220) or name..."
                 value={courseSearchQuery}
                 onChange={(e) => setCourseSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition"
+                className="w-full bg-zinc-950 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition"
               />
 
               <div className="flex flex-wrap gap-1.5">
@@ -3324,7 +3402,7 @@ export default function Home() {
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition ${
                       courseSearchFilter === filterTab
                         ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400'
-                        : 'bg-zinc-950 border-zinc-850 text-zinc-400 hover:text-zinc-200'
+                        : 'bg-zinc-950 border-slate-800 text-slate-400 hover:text-slate-100'
                     }`}
                   >
                     {filterTab}
@@ -3334,9 +3412,9 @@ export default function Home() {
             </div>
 
             {/* Search list results */}
-            <div className="flex-1 overflow-y-auto divide-y divide-zinc-850 p-2 space-y-1">
+            <div className="flex-1 overflow-y-auto divide-y divide-zinc-800 p-2 space-y-1">
               {filteredSearchCourses.length === 0 ? (
-                <div className="py-8 text-center text-zinc-500 text-xs">
+                <div className="py-8 text-center text-slate-400 text-xs">
                   No matching courses found.
                 </div>
               ) : (
@@ -3361,13 +3439,13 @@ export default function Home() {
                     >
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-extrabold text-white text-sm tracking-tight group-hover:text-indigo-400 transition">{course.code}</span>
-                          <span className="text-[9px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded font-mono text-zinc-400">
+                          <span className="font-extrabold text-slate-100 text-sm tracking-tight group-hover:text-indigo-400 transition">{course.code}</span>
+                          <span className="text-[9px] bg-zinc-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono text-slate-400">
                             {course.credits} Credits
                           </span>
                           {renderMandatoryBadge(course.code)}
                         </div>
-                        <p className="text-zinc-500 text-[10px] mt-0.5">{course.title}</p>
+                        <p className="text-slate-400 text-[10px] mt-0.5">{course.title}</p>
                         {isLocked && (
                           <div className="flex items-center gap-1 mt-1 text-[9px] text-rose-400 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -3377,7 +3455,7 @@ export default function Home() {
                       </div>
 
                       <div>
-                        <span className="text-[9px] text-zinc-600 font-semibold uppercase tracking-wider">
+                        <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
                           {course.category}
                         </span>
                       </div>
@@ -3394,16 +3472,16 @@ export default function Home() {
       {/* 4.5. Category Course Selector Modal Overlay */}
       {activeCategorySelectorKey !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f0f13] border border-zinc-850 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="bg-[#0f0f13] border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             
             {/* Modal Header */}
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
                   <BookOpen className="h-4.5 w-4.5 text-indigo-400" />
                   Add to {categoryDetails.name}
                 </h3>
-                <p className="text-[10px] text-zinc-500 mt-0.5">
+                <p className="text-[10px] text-slate-400 mt-0.5">
                   {categoryDetails.desc}
                 </p>
               </div>
@@ -3413,19 +3491,19 @@ export default function Home() {
                   setSelectedCategoryCourseCode("");
                   setCategoryCourseSearchQuery("");
                 }} 
-                className="text-zinc-400 hover:text-white p-1 rounded"
+                className="text-slate-400 hover:text-slate-100 p-1 rounded"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Target Semester Selector */}
-            <div className="p-4 bg-zinc-900/30 border-b border-zinc-800 space-y-2">
-              <label className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase">Select Target Semester:</label>
+            <div className="p-4 bg-zinc-900/30 border-b border-slate-800 space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Select Target Semester:</label>
               <select
                 value={selectedCategoryTargetSemesterId}
                 onChange={(e) => setSelectedCategoryTargetSemesterId(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition cursor-pointer"
+                className="w-full bg-zinc-950 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
               >
                 {semesters.map((sem, semIdx) => {
                   const intake = semesterIntakes[semIdx];
@@ -3441,21 +3519,21 @@ export default function Home() {
             </div>
 
             {/* Course Search Input */}
-            <div className="p-4 bg-zinc-900/30 border-b border-zinc-800 space-y-2">
-              <label className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase">Select Course to Add:</label>
+            <div className="p-4 bg-zinc-900/30 border-b border-slate-800 space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Select Course to Add:</label>
               <input
                 type="text"
                 placeholder="Search course by code or title..."
                 value={categoryCourseSearchQuery}
                 onChange={(e) => setCategoryCourseSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 text-xs px-3.5 py-2.5 rounded-xl text-white outline-none focus:border-indigo-500 transition"
+                className="w-full bg-zinc-950 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition"
               />
             </div>
 
             {/* Filtered Courses List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-zinc-850 p-3 space-y-1 bg-zinc-950/20 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto divide-y divide-zinc-800 p-3 space-y-1 bg-zinc-950/20 custom-scrollbar">
               {categoryFilteredCourses.length === 0 ? (
-                <div className="py-8 text-center text-zinc-500 text-xs italic">
+                <div className="py-8 text-center text-slate-400 text-xs italic">
                   {categoryCourseSearchQuery.trim() !== "" 
                     ? "No matching courses found."
                     : "All courses in this category have already been planned or completed!"}
@@ -3482,15 +3560,15 @@ export default function Home() {
                           ? 'opacity-40 cursor-not-allowed border-transparent' 
                           : isSelected
                             ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300'
-                            : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200'
+                            : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100'
                       }`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`font-extrabold text-sm tracking-tight transition ${isSelected ? 'text-indigo-400' : 'text-white'}`}>
+                          <span className={`font-extrabold text-sm tracking-tight transition ${isSelected ? 'text-indigo-400' : 'text-slate-100'}`}>
                             {course.code}
                           </span>
-                          <span className="text-[9px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded font-mono text-zinc-500">
+                          <span className="text-[9px] bg-zinc-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono text-slate-400">
                             {course.credits} Credits
                           </span>
                           {renderMandatoryBadge(course.code)}
@@ -3500,7 +3578,7 @@ export default function Home() {
                             </span>
                           )}
                         </div>
-                        <p className="text-zinc-550 text-[10px] mt-0.5">{course.title}</p>
+                        <p className="text-slate-400 text-[10px] mt-0.5">{course.title}</p>
                         {isLocked && (
                           <div className="flex items-center gap-1 mt-1 text-[9px] text-rose-400 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -3510,7 +3588,7 @@ export default function Home() {
                       </div>
 
                       <div className="text-right pl-4">
-                        <span className="text-[9px] text-zinc-600 font-semibold uppercase tracking-wider block">
+                        <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider block">
                           {course.category}
                         </span>
                       </div>
@@ -3521,7 +3599,7 @@ export default function Home() {
             </div>
 
             {/* Modal Actions */}
-            <div className="p-4 border-t border-zinc-800 flex gap-3 bg-zinc-900/10">
+            <div className="p-4 border-t border-slate-800 flex gap-3 bg-zinc-900/10">
               <button
                 type="button"
                 onClick={() => {
@@ -3529,7 +3607,7 @@ export default function Home() {
                   setSelectedCategoryCourseCode("");
                   setCategoryCourseSearchQuery("");
                 }}
-                className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl transition cursor-pointer"
+                className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-slate-800 text-slate-100 text-xs font-semibold rounded-xl transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -3537,7 +3615,7 @@ export default function Home() {
                 type="button"
                 disabled={!selectedCategoryCourseCode}
                 onClick={handleAddCategoryCourse}
-                className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg transition cursor-pointer"
+                className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 text-xs font-semibold rounded-xl shadow-lg transition cursor-pointer"
               >
                 Add Course
               </button>
@@ -3550,26 +3628,26 @@ export default function Home() {
       {/* 5. Reset Confirmation Modal overlay */}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f0f13] border border-zinc-800 rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4">
+          <div className="bg-[#0f0f13] border border-slate-800 rounded-xl w-full max-w-sm shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-3 text-rose-400">
               <AlertTriangle className="h-6 w-6 shrink-0" />
-              <h3 className="font-bold text-sm text-white">Reset Course Planner</h3>
+              <h3 className="font-bold text-sm text-slate-100">Reset Course Planner</h3>
             </div>
             
-            <p className="text-xs text-zinc-400 leading-relaxed">
+            <p className="text-xs text-slate-400 leading-relaxed">
               This action will completely wipe out your course schedule, grades, and Capstone thesis records. This is irreversible.
             </p>
 
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-semibold rounded-xl transition"
+                className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-800 border border-slate-800 text-slate-100 text-xs font-semibold rounded-xl transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResetData}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-lg transition"
+                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-slate-100 text-xs font-semibold rounded-xl shadow-lg transition"
               >
                 Wipe Data & Reset
               </button>
@@ -3579,17 +3657,17 @@ export default function Home() {
       )}
 
       {/* Proper Stationary Footer Section */}
-      <footer className="mt-auto pt-8 pb-6 border-t border-zinc-900 bg-zinc-950/20 flex flex-col items-center justify-center gap-4 text-center">
+      <footer className="mt-auto pt-8 pb-6 border-t border-slate-800 bg-zinc-950/20 flex flex-col items-center justify-center gap-4 text-center">
         {/* Connect with me social links */}
-        <div className="flex items-center gap-4 text-xs font-semibold text-zinc-400">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Connect with me:</span>
+        <div className="flex items-center gap-4 text-xs font-semibold text-slate-400">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Connect with me:</span>
           <a
             href="https://github.com/fakekhanabdullah"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 hover:text-indigo-400 transition"
           >
-            <svg className="h-3.5 w-3.5 fill-current text-zinc-400 hover:text-indigo-400" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
             <span>GitHub</span>
           </a>
           <span className="text-zinc-800">|</span>
@@ -3599,13 +3677,13 @@ export default function Home() {
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 hover:text-indigo-400 transition"
           >
-            <svg className="h-3.5 w-3.5 fill-current text-zinc-400 hover:text-indigo-400" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
             <span>LinkedIn</span>
           </a>
         </div>
 
         {/* Muted Copyright Disclaimer */}
-        <div className="text-[10px] text-zinc-550 leading-relaxed font-medium">
+        <div className="text-[10px] text-slate-400 leading-relaxed font-medium">
           <p>© 2026 Flow136. Made by: Khan Abdullah</p>
         </div>
       </footer>
@@ -3613,20 +3691,20 @@ export default function Home() {
       {/* 5. Grade Sheet Preview Modal */}
       {showGradeSheetModal && isMounted && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-transparent print:backdrop-none no-print-backdrop">
-          <div className="bg-slate-950 border border-indigo-500/30 rounded-3xl max-w-4xl w-full p-6 text-white shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
+          <div className="bg-[#09090b] border border-slate-800 rounded-xl max-w-4xl w-full p-6 text-slate-100 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
             
             {/* Modal Action Header Bar (3 Controls) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10 no-print">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800/60 no-print">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-indigo-400" />
-                <h3 className="text-sm sm:text-base font-bold text-white">Academic Progress Snapshot Preview</h3>
+                <h3 className="text-sm sm:text-base font-bold text-slate-100">Academic Progress Snapshot Preview</h3>
               </div>
               <div className="flex items-center gap-3">
                 {/* Control 1: Download PNG Button */}
                 <button
                   onClick={handleGenerateGradeSheet}
                   disabled={isGeneratingSnapshot}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
                 >
                   <Download className="h-4 w-4" />
                   <span>{isGeneratingSnapshot ? "Generating PNG..." : "Download PNG"}</span>
@@ -3635,7 +3713,7 @@ export default function Home() {
                 {/* Control 2: Close Button */}
                 <button
                   onClick={() => setShowGradeSheetModal(false)}
-                  className="h-8 w-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
+                  className="h-8 w-8 rounded-xl bg-white/5 hover:bg-white/10 border border-slate-800/60 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
                   title="Close preview"
                 >
                   <X className="h-4 w-4" />
@@ -3649,26 +3727,26 @@ export default function Home() {
               <div 
                 id="flow136-grade-sheet-export-node"
                 style={{ 
-                  backgroundColor: '#030712',
+                  backgroundColor: '#050507',
                   fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                 }}
-                className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-2xl p-6 shadow-2xl text-white relative overflow-visible font-sans mx-auto"
+                className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-xl p-6 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto"
               >
                 {/* Watermark Background (Z-Index 0) */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
-                  <span className="text-[120px] font-black tracking-tighter text-white/[0.03] transform -rotate-12 whitespace-nowrap">
+                  <span className="text-[120px] font-black tracking-tighter text-slate-100/[0.03] transform -rotate-12 whitespace-nowrap">
                     FLOW 136
                   </span>
                 </div>
 
                 {/* Section 1: Header (Z-Index 10) */}
-                <div className="flex items-center justify-between pb-6 border-b border-white/10 relative z-10">
+                <div className="flex items-center justify-between pb-6 border-b border-slate-800/60 relative z-10">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.25)]">
                       <GraduationCap className="h-5 w-5 text-indigo-400" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-extrabold tracking-tight text-white">Flow136</h1>
+                      <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">Flow136</h1>
                       <span className="text-[10px] font-semibold tracking-widest text-indigo-400 uppercase block">
                         OFFICIAL CURRICULUM PROGRESS & GRADE SHEET
                       </span>
@@ -3679,7 +3757,7 @@ export default function Home() {
                     <span className="text-xs font-bold text-indigo-300 block">
                       {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Planner
                     </span>
-                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">
+                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
                       Target Goal: 136 Credits
                     </p>
                   </div>
@@ -3688,25 +3766,25 @@ export default function Home() {
                 {/* Section 2: Executive Status Bars & Standing (Z-Index 10) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 relative z-10">
                   {/* Master Credits Box */}
-                  <div className="bg-slate-900/60 border border-indigo-500/20 p-4 rounded-xl space-y-2">
+                  <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-2">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-400 font-medium uppercase tracking-wider text-[10px]">Total Degree Progress</span>
-                      <span className="text-white font-extrabold">{cumulativeStats.completedCredits} / 136 Cr Completed</span>
+                      <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Total Degree Progress</span>
+                      <span className="text-slate-100 font-extrabold">{cumulativeStats.completedCredits} / 136 Cr Completed</span>
                     </div>
-                    <div className="h-2.5 w-full bg-slate-955 border border-white/10 rounded-full overflow-hidden p-0.5">
+                    <div className="h-2.5 w-full bg-slate-955 border border-slate-800/60 rounded-full overflow-hidden p-0.5">
                       <div 
                         style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
                         className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
                       />
                     </div>
                     {/* Mini Categories & Timeline Stats */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 text-[10px] text-zinc-400">
-                      <div>Program Core: <span className="text-zinc-200 font-semibold">{curriculumProgress.coreCompleted}/{curriculumProgress.coreTotal} Cr</span></div>
-                      <div>School Core: <span className="text-zinc-200 font-semibold">{curriculumProgress.schoolCoreCompleted}/{curriculumProgress.schoolCoreTotal} Cr</span></div>
-                      <div>GenEd Streams: <span className="text-zinc-200 font-semibold">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed}/39 Cr</span></div>
-                      <div>Major Electives: <span className="text-zinc-200 font-semibold">{curriculumProgress.electiveCompleted}/6 Cr</span></div>
-                      <div className="col-span-2">Capstone Thesis: <span className="text-zinc-200 font-semibold">{curriculumProgress.thesisCompleted}/{curriculumProgress.thesisTotal} Cr</span></div>
-                      <div className="col-span-2 pt-2 border-t border-white/5 flex justify-between text-[10px] text-zinc-400">
+                    <div className="grid grid-cols-2 gap-2 pt-2 text-[10px] text-slate-400">
+                      <div>Program Core: <span className="text-slate-100 font-semibold">{curriculumProgress.coreCompleted}/{curriculumProgress.coreTotal} Cr</span></div>
+                      <div>School Core: <span className="text-slate-100 font-semibold">{curriculumProgress.schoolCoreCompleted}/{curriculumProgress.schoolCoreTotal} Cr</span></div>
+                      <div>GenEd Streams: <span className="text-slate-100 font-semibold">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed}/39 Cr</span></div>
+                      <div>Major Electives: <span className="text-slate-100 font-semibold">{curriculumProgress.electiveCompleted}/6 Cr</span></div>
+                      <div className="col-span-2">Capstone Thesis: <span className="text-slate-100 font-semibold">{curriculumProgress.thesisCompleted}/{curriculumProgress.thesisTotal} Cr</span></div>
+                      <div className="col-span-2 pt-2 border-t border-slate-800/40 flex justify-between text-[10px] text-slate-400">
                         <span>Semesters Planned: <strong className="text-indigo-300">{semesters.length}</strong></span>
                         <span>Completed Courses: <strong className="text-emerald-400">{semesters.reduce((acc, sem) => acc + sem.courses.filter(c => mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F")).length, 0) + (isCSE400Passed ? 1 : 0)}</strong></span>
                       </div>
@@ -3715,9 +3793,9 @@ export default function Home() {
 
                   {/* Academic Standing & CGPA Display (ONLY in Mode B) */}
                   {mode === 'gpa' && (
-                    <div className="bg-slate-900/60 border border-indigo-500/20 p-4 rounded-xl flex flex-col justify-between">
+                    <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Cumulative CGPA</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cumulative CGPA</span>
                         {cumulativeStats.cgpa >= 2.0 ? (
                           <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                             Good Standing
@@ -3728,10 +3806,10 @@ export default function Home() {
                           </span>
                         )}
                       </div>
-                      <div className="text-3xl font-extrabold text-white mt-1">
-                        {cumulativeStats.cgpa.toFixed(2)} <span className="text-xs text-zinc-500 font-normal">/ 4.00 Scale</span>
+                      <div className="text-3xl font-extrabold text-slate-100 mt-1">
+                        {cumulativeStats.cgpa.toFixed(2)} <span className="text-xs text-slate-400 font-normal">/ 4.00 Scale</span>
                       </div>
-                      <p className="text-[10px] text-zinc-400 leading-relaxed">
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
                         Evaluated across chronologically latest attempts.
                       </p>
                     </div>
@@ -3740,7 +3818,7 @@ export default function Home() {
 
                 {/* Section 3: Completed Courses Table / Grade Sheet (Z-Index 10) */}
                 <div className="relative z-10 space-y-3">
-                  <h2 className="text-xs font-bold tracking-wider text-slate-300 uppercase">COMPLETED COURSEWORK</h2>
+                  <h2 className="text-xs font-bold tracking-wider text-slate-100 uppercase">COMPLETED COURSEWORK</h2>
                   
                   {(() => {
                     const exportCompletedCourses: Array<{ code: string; title: string; credits: number; grade: string; semesterName: string }> = [];
@@ -3786,17 +3864,17 @@ export default function Home() {
 
                     if (exportCompletedCourses.length === 0) {
                       return (
-                        <div className="p-6 text-center text-slate-500 text-xs italic border border-white/10 rounded-xl bg-slate-900/40">
+                        <div className="p-6 text-center text-slate-400 text-xs italic border border-slate-800/60 rounded-xl bg-slate-900/40">
                           No completed courses recorded yet.
                         </div>
                       );
                     }
 
                     return (
-                      <div className="w-full border border-white/10 rounded-xl overflow-hidden bg-slate-900/40">
+                      <div className="w-full border border-slate-800/60 rounded-xl overflow-hidden bg-slate-900/40">
                         <table className="w-full text-xs text-left border-collapse">
                           <thead>
-                            <tr className="bg-white/5 border-b border-white/10 text-zinc-400 font-semibold uppercase text-[10px] tracking-wider">
+                            <tr className="bg-white/5 border-b border-slate-800/60 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
                               <th className="py-2.5 px-3">Course Code</th>
                               <th className="py-2.5 px-3">Title</th>
                               <th className="py-2.5 px-3 text-center">Credits</th>
@@ -3808,12 +3886,12 @@ export default function Home() {
                             {exportCompletedCourses.map((item, idx) => (
                               <tr key={`${item.code}_${idx}`} className="hover:bg-white/[0.02]">
                                 <td className="py-2 px-3 font-bold text-indigo-300">{item.code}</td>
-                                <td className="py-2 px-3 text-slate-300 font-medium">{item.title}</td>
+                                <td className="py-2 px-3 text-slate-100 font-medium">{item.title}</td>
                                 <td className="py-2 px-3 text-slate-400 text-center font-semibold">{item.credits} Cr</td>
                                 {mode === 'gpa' && (
                                   <td className="py-2 px-3 font-bold text-emerald-400 text-right">{item.grade}</td>
                                 )}
-                                <td className="py-2 px-3 text-zinc-500 text-right text-[11px]">{item.semesterName}</td>
+                                <td className="py-2 px-3 text-slate-400 text-right text-[11px]">{item.semesterName}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -3824,7 +3902,7 @@ export default function Home() {
                 </div>
 
                 {/* Section 4: Footer Watermark (Z-Index 10) */}
-                <div className="border-t border-white/10 mt-4 pt-3 relative z-10 text-center">
+                <div className="border-t border-slate-800/60 mt-4 pt-3 relative z-10 text-center">
                   <p className="text-xs text-slate-400 font-medium leading-relaxed">
                     Flow136 &bull; Your curriculum, minus the complexity.
                   </p>
@@ -3833,10 +3911,10 @@ export default function Home() {
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="pt-4 border-t border-white/10 flex justify-end gap-3 no-print">
+            <div className="pt-4 border-t border-slate-800/60 flex justify-end gap-3 no-print">
               <button
                 onClick={() => setShowGradeSheetModal(false)}
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer"
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-slate-800/60 rounded-xl text-xs font-semibold text-slate-100 hover:text-slate-100 transition cursor-pointer"
               >
                 Close Preview
               </button>
@@ -3849,25 +3927,25 @@ export default function Home() {
       {/* Recommended Curriculum Roadmap Modal Overlay */}
       {showRoadmapModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-950 border border-indigo-500/30 rounded-3xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl">
+          <div className="bg-[#09090b] border border-slate-800 rounded-xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl">
             {/* Ambient glows inside modal */}
             <div className="absolute top-[-10%] left-[-10%] w-[30%] h-[30%] rounded-full bg-indigo-500/10 blur-[80px] pointer-events-none" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] rounded-full bg-purple-500/10 blur-[80px] pointer-events-none" />
             
             {/* Header */}
-            <div className="px-6 py-4 border-b border-zinc-800/85 flex items-center justify-between relative z-10 shrink-0">
+            <div className="px-6 py-4 border-b border-slate-800/85 flex items-center justify-between relative z-10 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-lg border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
                   <HelpCircle className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Recommended Courses for CSE Curriculum</h3>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">FYAT Recommended Course Roadmap Chart</p>
+                  <h3 className="text-base font-bold text-slate-100">Recommended Courses for CSE Curriculum</h3>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">FYAT Recommended Course Roadmap Chart</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowRoadmapModal(false)}
-                className="h-8 w-8 rounded-lg bg-zinc-900 border border-white/5 hover:bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+                className="h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800/40 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
               >
                 <X className="h-4.5 w-4.5" />
               </button>
@@ -3878,45 +3956,45 @@ export default function Home() {
               <div className="min-w-[950px] space-y-6">
                 
                 {/* Stats Summary Header - CSE Curriculum */}
-                <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-2">
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+                <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-xl p-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                     <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">CSE Curriculum (136 Credits)</span>
                     <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-semibold">132 Academic + 4 Non-Academic Credits</span>
                   </div>
                   <div className="grid grid-cols-7 gap-2 text-center">
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 uppercase">BIL</p>
-                      <p className="text-xs font-bold text-white mt-1">2 Courses</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase">BIL</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">2 Courses</p>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 uppercase">TARC (RS)</p>
-                      <p className="text-xs font-bold text-white mt-1">3 Courses</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase">TARC (RS)</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">3 Courses</p>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 uppercase">MNS</p>
-                      <p className="text-xs font-bold text-white mt-1">7 Courses</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase">MNS</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">7 Courses</p>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 uppercase">COD (GenEd)</p>
-                      <p className="text-xs font-bold text-white mt-1">5 Courses</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase">COD (GenEd)</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">5 Courses</p>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 uppercase">Dept Core</p>
-                      <p className="text-xs font-bold text-white mt-1">25 + 2 Elec</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase">Dept Core</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">25 + 2 Elec</p>
                     </div>
                     <div className="bg-zinc-950/40 p-2 rounded-xl border border-emerald-500/20">
                       <p className="text-[10px] text-emerald-500/80 uppercase leading-tight">Thesis / Internship / Final Project</p>
                       <p className="text-xs font-bold text-emerald-300 mt-1">1 Course</p>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-zinc-500 uppercase">Total Courses</p>
-                      <p className="text-xs font-bold text-white mt-1">45</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase">Total Courses</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">45</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Main Split Table Layout */}
-                <div className="flex gap-0 items-stretch rounded-2xl overflow-hidden border border-zinc-700/50 bg-zinc-900/60 shadow-lg">
+                <div className="flex gap-0 items-stretch rounded-xl overflow-hidden border border-zinc-700/50 bg-zinc-900/60 shadow-lg">
 
                   {/* ═══════════════════════════════════════════════
                       LEFT SECTION: COURSE OUTSIDE DEPARTMENT
@@ -3944,21 +4022,21 @@ export default function Home() {
                         </div>
                         <table className="w-full text-left text-xs border-collapse">
                           <tbody>
-                            <tr className="border-b border-zinc-900/60 bg-amber-500/10">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">ENG091</td>
-                              <td className="p-1.5 text-amber-200/80 text-[11px]">Foundation Course in English <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
+                            <tr className="border-b border-slate-800/60 bg-amber-500/10">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">ENG091</td>
+                              <td className="p-1.5 text-amber-200/80 text-[11px]">{COURSES.find(c => c.code === "ENG091")?.title} <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">ENG101</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">English Fundamentals</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">ENG101</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "ENG101")?.title}</td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">ENG102</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Composition I</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">ENG102</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "ENG102")?.title}</td>
                             </tr>
                             <tr>
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">ENG103</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Advanced Writing Skills and Presentation</td>
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">ENG103</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "ENG103")?.title}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -3972,21 +4050,21 @@ export default function Home() {
                         </div>
                         <table className="w-full text-left text-xs border-collapse">
                           <tbody>
-                            <tr className="border-b border-zinc-900/60 bg-amber-500/10">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">MAT092</td>
-                              <td className="p-1.5 text-amber-200/80 text-[11px]">Basic Course in Mathematics II <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
+                            <tr className="border-b border-slate-800/60 bg-amber-500/10">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">MAT092</td>
+                              <td className="p-1.5 text-amber-200/80 text-[11px]">{COURSES.find(c => c.code === "MAT092")?.title} <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT110</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH I: Differential Calculus &amp; Coordinate Geometry</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT110</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT110")?.title}</td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">PHY111</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Principles of Physics I</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">PHY111</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "PHY111")?.title}</td>
                             </tr>
                             <tr>
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">STA201</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Elements of Statistics and Probabilities</td>
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">STA201</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "STA201")?.title}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -4000,17 +4078,17 @@ export default function Home() {
                         </div>
                         <table className="w-full text-left text-xs border-collapse">
                           <tbody>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">HUM103</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Ethics and Culture</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">HUM103</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "HUM103")?.title}</td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">BNG103</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Bangla Language and Literature</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">BNG103</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "BNG103")?.title}</td>
                             </tr>
                             <tr>
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">EMB101</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Emergence of Bangladesh</td>
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">EMB101</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "EMB101")?.title}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -4024,21 +4102,21 @@ export default function Home() {
                         </div>
                         <table className="w-full text-left text-xs border-collapse">
                           <tbody>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT120</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH II: Integral Calculus &amp; Differential Equations</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT120</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT120")?.title}</td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT215</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH III: Complex Variables &amp; Laplace Transformations</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT215</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT215")?.title}</td>
                             </tr>
-                            <tr className="border-b border-zinc-900/60">
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">MAT216</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">MATH IV: Linear Algebra &amp; Fourier Analysis</td>
+                            <tr className="border-b border-slate-800/60">
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT216</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT216")?.title}</td>
                             </tr>
                             <tr>
-                              <td className="p-1.5 border-r border-zinc-900/60 font-bold font-mono text-zinc-300 w-16 text-center text-[11px]">PHY112</td>
-                              <td className="p-1.5 text-zinc-400 text-[11px]">Principles of Physics II</td>
+                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">PHY112</td>
+                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "PHY112")?.title}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -4056,7 +4134,7 @@ export default function Home() {
                             <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider mb-1">Stream 2 — Math &amp; Natural Sciences</p>
                             <div className="flex flex-wrap gap-1">
                               {["BIO101","CHE101","ENV103","GSC110","MAT101","PHY101","STA101"].map(c => (
-                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-purple-500/20 text-purple-200/80 px-1.5 py-0.5 rounded">{c}</span>
+                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-slate-800 text-purple-200/80 px-1.5 py-0.5 rounded">{c}</span>
                               ))}
                             </div>
                           </div>
@@ -4113,10 +4191,10 @@ export default function Home() {
                     </div>
 
                     <div className="p-3">
-                      <div className="border border-white/5 rounded-xl overflow-hidden bg-zinc-950/40">
+                      <div className="border border-slate-800/40 rounded-xl overflow-hidden bg-zinc-950/40">
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
-                            <tr className="border-b-2 border-zinc-800/80 text-[10px] uppercase font-bold">
+                            <tr className="border-b-2 border-slate-800/80 text-[10px] uppercase font-bold">
                               <th colSpan={2} className="p-1.5 border-r-2 border-zinc-700/60 text-center bg-emerald-950/50 text-emerald-400 tracking-wider">
                                 Program Core (25 Courses)
                               </th>
@@ -4124,10 +4202,10 @@ export default function Home() {
                                 CSE Electives (24 Courses)
                               </th>
                             </tr>
-                            <tr className="border-b border-zinc-800/60 text-[9px] uppercase font-semibold">
-                              <th className="p-1.5 border-r border-zinc-900/60 w-[13%] text-center bg-emerald-950/30 text-emerald-500">Code</th>
+                            <tr className="border-b border-slate-800/60 text-[9px] uppercase font-semibold">
+                              <th className="p-1.5 border-r border-slate-800/60 w-[13%] text-center bg-emerald-950/30 text-emerald-500">Code</th>
                               <th className="p-1.5 border-r-2 border-zinc-700/60 bg-emerald-950/30 text-emerald-500">Course Name</th>
-                              <th className="p-1.5 border-r border-zinc-900/60 w-[13%] text-center bg-amber-950/30 text-amber-500">Code</th>
+                              <th className="p-1.5 border-r border-slate-800/60 w-[13%] text-center bg-amber-950/30 text-amber-500">Code</th>
                               <th className="p-1.5 bg-amber-950/30 text-amber-500">Course Name</th>
                             </tr>
                           </thead>
@@ -4174,17 +4252,17 @@ export default function Home() {
                               const isCore1 = programCore.includes(row.c1);
                               const isElect2 = electives.includes(row.c2);
                               return (
-                                <tr key={index} className="border-b border-zinc-900/60 last:border-0">
-                                  <td className={`p-1.5 border-r border-zinc-900/60 font-mono font-bold text-center text-[11px] ${isCore1 ? 'bg-emerald-950/40 text-emerald-300' : 'text-zinc-300'}`}>
+                                <tr key={index} className="border-b border-slate-800/60 last:border-0">
+                                  <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${isCore1 ? 'bg-emerald-950/40 text-emerald-300' : 'text-slate-100'}`}>
                                     {row.c1 || ""}
                                   </td>
-                                  <td className={`p-1.5 border-r-2 border-zinc-700/60 text-[11px] ${isCore1 ? 'bg-emerald-950/20 text-emerald-100/90' : 'text-zinc-400'}`}>
+                                  <td className={`p-1.5 border-r-2 border-zinc-700/60 text-[11px] ${isCore1 ? 'bg-emerald-950/20 text-emerald-100/90' : 'text-slate-400'}`}>
                                     {row.n1}
                                   </td>
-                                  <td className={`p-1.5 border-r border-zinc-900/60 font-mono font-bold text-center text-[11px] ${isElect2 ? 'bg-amber-950/40 text-amber-300' : 'text-zinc-500'}`}>
+                                  <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${isElect2 ? 'bg-amber-950/40 text-amber-300' : 'text-slate-400'}`}>
                                     {row.c2 || ""}
                                   </td>
-                                  <td className={`p-1.5 text-[11px] ${isElect2 ? 'bg-amber-950/20 text-amber-100/90' : 'text-zinc-600'}`}>
+                                  <td className={`p-1.5 text-[11px] ${isElect2 ? 'bg-amber-950/20 text-amber-100/90' : 'text-slate-400'}`}>
                                     {row.n2}
                                   </td>
                                 </tr>
@@ -4199,10 +4277,10 @@ export default function Home() {
                 </div>
 
                 {/* GenEd Help Link Section */}
-                <div className="bg-zinc-900/40 border border-indigo-500/20 rounded-2xl p-4 flex items-center justify-between mt-4">
+                <div className="bg-zinc-900/40 border border-slate-800 rounded-xl p-4 flex items-center justify-between mt-4">
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
-                    <p className="text-xs text-slate-300 font-medium">
+                    <p className="text-xs text-slate-100 font-medium">
                       Need more help understanding the GenEd streams?
                     </p>
                   </div>
@@ -4210,7 +4288,7 @@ export default function Home() {
                     href="https://www.bracu.ac.bd/avilable-program/general-education-gened"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-98 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-98 cursor-pointer"
                   >
                     <span>View the Official BRACU GenEd Guidelines</span>
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -4221,7 +4299,7 @@ export default function Home() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[10px] text-zinc-550 shrink-0 relative z-10">
+            <div className="px-6 py-4 border-t border-slate-800/80 bg-zinc-950/60 flex items-center justify-between text-[10px] text-slate-400 shrink-0 relative z-10">
               <span className="font-bold uppercase tracking-wider text-indigo-400/80">
                 Guideline for CSE Curriculum
               </span>
@@ -4235,8 +4313,8 @@ export default function Home() {
                   Amber = CSE Electives
                 </span>
               </span>
-              <span className="text-zinc-400 text-right max-w-xs">
-                Created By <strong className="text-zinc-300">Badhon Nandi</strong>, MENTOR (FYAT)<br />
+              <span className="text-slate-400 text-right max-w-xs">
+                Created By <strong className="text-slate-100">Badhon Nandi</strong>, MENTOR (FYAT)<br />
                 Office of Academic Advising(OAA), Brac University
               </span>
             </div>
