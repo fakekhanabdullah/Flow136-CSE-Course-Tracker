@@ -249,6 +249,26 @@ export default function Home() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Register Service Worker for PWA (Progressive Web App) support
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      const registerSW = async () => {
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          console.log('Service Worker registered successfully with scope:', reg.scope);
+        } catch (error) {
+          console.error('Service Worker registration failed:', error);
+        }
+      };
+      if (document.readyState === 'complete') {
+        registerSW();
+      } else {
+        window.addEventListener('load', registerSW);
+        return () => window.removeEventListener('load', registerSW);
+      }
+    }
+  }, []);
+
   // Hydration fix & LocalStorage Loader
   useEffect(() => {
     setIsMounted(true);
@@ -1854,17 +1874,19 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                        className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
                           thesisSteps.step1
-                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                         }`}
                       >
-                        {thesisSteps.step1 && (
-                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                        )}
+                        {thesisSteps.step1 ? (
+                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          </div>
+                        ) : null}
                       </button>
                       <span
                         onClick={() => {
@@ -1885,17 +1907,19 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                        className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
                           thesisSteps.step2
-                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                         }`}
                       >
-                        {thesisSteps.step2 && (
-                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                        )}
+                        {thesisSteps.step2 ? (
+                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          </div>
+                        ) : null}
                       </button>
                       <span
                         onClick={() => {
@@ -1912,17 +1936,19 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => handleThesisStep3Toggle(!thesisSteps.step3)}
-                        className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                        className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
                           thesisSteps.step3
-                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                         }`}
                       >
-                        {thesisSteps.step3 && (
-                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                        )}
+                        {thesisSteps.step3 ? (
+                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          </div>
+                        ) : null}
                       </button>
                       <span
                         onClick={() => handleThesisStep3Toggle(!thesisSteps.step3)}
@@ -1945,17 +1971,19 @@ export default function Home() {
                           handleCSE400CompletionToggle(nextVal);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, nextVal, internshipCompleted, onboardingData);
                         }}
-                        className={`h-4.5 w-4.5 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
+                        className={`h-4.5 w-4.5 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
                           projectCompleted
-                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                         }`}
                       >
-                        {projectCompleted && (
-                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                        )}
+                        {projectCompleted ? (
+                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          </div>
+                        ) : null}
                       </button>
                       <div
                         onClick={() => {
@@ -1974,7 +2002,7 @@ export default function Home() {
                 )}
 
                 {thesisTrack === 'internship' && (
-                  <div className="bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
+                  <div className="bg-zinc-900/30 border border-slate-800/40 p-4 rounded-xl">
                     <div className="flex items-start gap-3 text-xs text-slate-100 select-none">
                       <button
                         type="button"
@@ -1984,17 +2012,19 @@ export default function Home() {
                           handleCSE400CompletionToggle(nextVal);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, projectCompleted, nextVal, onboardingData);
                         }}
-                        className={`h-4.5 w-4.5 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
+                        className={`h-4.5 w-4.5 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
                           internshipCompleted
-                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                            : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                         }`}
                       >
-                        {internshipCompleted && (
-                          <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                        )}
+                        {internshipCompleted ? (
+                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          </div>
+                        ) : null}
                       </button>
                       <div
                         onClick={() => {
@@ -2345,20 +2375,22 @@ export default function Home() {
           {/* 1. Logo and Catchphrase */}
           <div 
             onClick={() => setShowDashboard(false)}
-            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
+            className="flex flex-col items-center gap-1.5 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
             title="Back to Landing Page"
           >
-            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
-              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-              </svg>
-            </div>
-            <div className="flex flex-col items-start text-left">
+            {/* Logo and Flow136 text in one line */}
+            <div className="flex items-center gap-3">
+              <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
+                <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                </svg>
+              </div>
               <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
                 Flow136
               </h1>
-              <p className="text-[10px] text-purple-400 font-semibold tracking-wide mt-0.5">Your curriculum, minus the complexity.</p>
             </div>
+            {/* Catchphrase under flow 136, centered */}
+            <p className="text-[10px] text-purple-400 font-semibold tracking-wide mt-0.5">Your curriculum, minus the complexity.</p>
           </div>
 
           {/* 2. Mode Toggler */}
@@ -3401,17 +3433,19 @@ export default function Home() {
                         <button
                           onClick={() => handleToggleSemesterAllCompleted(sem.id)}
                           title="Toggle all courses in semester"
-                          className={`h-4.5 w-4.5 rounded-full border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                          className={`h-4.5 w-4.5 rounded-full transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
                             isAllCompleted
-                              ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_10px_rgba(59,130,246,0.6)]'
-                              : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                              ? 'shadow-[0_0_10px_rgba(59,130,246,0.7)]'
+                              : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                           }`}
                         >
-                          {isAllCompleted && (
-                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          )}
+                          {isAllCompleted ? (
+                            <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                              <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                              </svg>
+                            </div>
+                          ) : null}
                         </button>
                         <h3 className="font-bold text-sm text-slate-100 tracking-tight flex flex-wrap items-center gap-2">
                           <span>{`Semester ${semIdx + 1}`}</span>
@@ -3552,17 +3586,19 @@ export default function Home() {
                                 <button
                                   onClick={() => handleCompletionToggle(sem.id, c.code, !c.isCompleted)}
                                   title={c.isCompleted ? "Mark as incomplete" : "Mark as complete"}
-                                  className={`h-4 w-4 rounded-md border-2 transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                                  className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
                                     c.isCompleted
-                                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.5)]'
-                                      : 'border-slate-600 hover:border-slate-400 bg-transparent'
+                                      ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                                      : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
                                   }`}
                                 >
-                                  {c.isCompleted && (
-                                    <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                    </svg>
-                                  )}
+                                  {c.isCompleted ? (
+                                    <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                                      <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                      </svg>
+                                    </div>
+                                  ) : null}
                                 </button>
                                 
                                 {mode === 'gpa' && isCreditCourse && (

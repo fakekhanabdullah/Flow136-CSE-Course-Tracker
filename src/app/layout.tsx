@@ -6,7 +6,9 @@ export const metadata: Metadata = {
   description: "Your curriculum, minus the complexity. Map out your 136-credit BRACU CSE degree cleanly and offline with Flow136.",
   icons: {
     icon: "/icon.svg",
+    apple: "/icon.svg",
   },
+  manifest: "/manifest.json",
   openGraph: {
     title: "Flow136",
     description: "Your curriculum, minus the complexity. Map out your 136-credit BRACU CSE degree cleanly and offline with Flow136.",
