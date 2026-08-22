@@ -199,6 +199,38 @@ export default function Home() {
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
   const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
+  const [snapshotScale, setSnapshotScale] = useState<number>(1);
+  const [snapshotHeight, setSnapshotHeight] = useState<number>(700);
+
+  // Dynamic scaling for the Academic Progress Snapshot Preview Modal
+  useEffect(() => {
+    if (!showGradeSheetModal) return;
+
+    const updateScaling = () => {
+      const element = document.getElementById("flow136-grade-sheet-export-node");
+      if (!element) return;
+      
+      const naturalHeight = element.offsetHeight || 700;
+      setSnapshotHeight(naturalHeight);
+
+      const parentWidth = window.innerWidth;
+      // Subtract margins & paddings (32px padding for screen edges on mobile, 32px for inner container = 64px)
+      const availableWidth = parentWidth - 64;
+      
+      const scaleVal = Math.min(1, Math.max(0.3, availableWidth / 750));
+      setSnapshotScale(scaleVal);
+    };
+
+    // Run layout measuring after render
+    const timer = setTimeout(updateScaling, 50);
+    window.addEventListener("resize", updateScaling);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", updateScaling);
+    };
+  }, [showGradeSheetModal, semesters, mode]);
+
   const [showRoadmapModal, setShowRoadmapModal] = useState<boolean>(false);
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
@@ -2420,7 +2452,7 @@ export default function Home() {
                   <button
                     onClick={() => {
                       setShowGradeSheetModal(true);
-                      showHeaderMenu(false);
+                      setShowHeaderMenu(false);
                     }}
                     className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
                   >
@@ -4036,9 +4068,16 @@ export default function Home() {
             </div>
 
             {/* Scrollable Printable Grade Sheet Container */}
-            <div className="overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 flex items-start justify-center">
-              {/* Responsive scaling wrapper for mobile screens to fit 750px inside narrow viewports */}
-              <div className="w-[750px] shrink-0 md:transform-none transform scale-[0.45] xs:scale-[0.52] sm:scale-[0.72] md:scale-100 origin-top -my-[270px] xs:-my-[230px] sm:-my-[110px] md:my-0 transition-all duration-300">
+            <div className="overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 flex items-start justify-center flex-grow">
+              {/* Dynamic responsive scaling wrapper to fit 750px perfectly in any viewport width */}
+              <div 
+                className="w-[750px] shrink-0 transition-all duration-300"
+                style={{
+                  height: `${snapshotHeight * snapshotScale}px`,
+                  transform: `scale(${snapshotScale})`,
+                  transformOrigin: 'top center'
+                }}
+              >
                 {/* Visible Grade Sheet Node Target */}
                 <div 
                   id="flow136-grade-sheet-export-node"
