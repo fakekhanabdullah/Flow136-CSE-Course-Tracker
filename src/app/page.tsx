@@ -140,6 +140,35 @@ const GRADING_SCALE: Record<string, number> = {
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
 
+  const getHighlightClass = (target: string) => {
+    if (tutorialStep === null) return "";
+    
+    // Fine-tuned soft glows to match theme elegantly without being too intense
+    let glow = "";
+    if (target === "layout-toggles") {
+      glow = "!border-indigo-500/40 !shadow-[0_0_6px_rgba(99,102,241,0.2)] transition-all duration-300";
+    } else if (target.startsWith("category-")) {
+      glow = "!border-indigo-500/35 !shadow-[0_0_8px_rgba(99,102,241,0.18)] transition-all duration-300";
+    } else if (target === "gpa-solver-card" || target === "roi-analyzer") {
+      glow = "!border-indigo-500/35 !shadow-[0_0_8px_rgba(99,102,241,0.18)] transition-all duration-300";
+    } else {
+      glow = "!border-indigo-500/45 !shadow-[0_0_8px_rgba(99,102,241,0.22)] transition-all duration-300";
+    }
+
+    if (target === "cta-button" && tutorialStep === 1) return glow;
+    if ((target === "pathway-card-a" || target === "pathway-card-b") && tutorialStep === 2) return glow;
+    if ((target === "rs-term-select" || target === "starting-intake-select" || target === "english-status-select") && tutorialStep === 3) return glow;
+    if (target === "generate-plan-btn" && tutorialStep === 4) return glow;
+    if (target === "mode-toggler" && (tutorialStep === 5 || tutorialStep === 7)) return glow;
+    if ((target === "category-core" || target === "category-school" || target === "category-electives" || target === "category-gened") && tutorialStep === 6) return glow;
+    if (target === "gpa-solver-card" && tutorialStep === 8) return glow;
+    if (target === "roi-analyzer" && (tutorialStep === 8 || tutorialStep === 9)) return glow;
+    if (target === "layout-toggles" && tutorialStep === 10) return glow;
+    if (target === "hamburger-menu" && tutorialStep === 11) return glow;
+    if (target === "feeling-lost-btn" && tutorialStep === 12) return glow;
+    return "";
+  };
+
   // App settings/modes
   const [mode, setMode] = useState<'tracker' | 'gpa'>('tracker');
   const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
@@ -201,6 +230,71 @@ export default function Home() {
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
   const [snapshotScale, setSnapshotScale] = useState<number>(1);
   const [snapshotHeight, setSnapshotHeight] = useState<number>(700);
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+
+  // Auto-start tutorial on user's first time
+  useEffect(() => {
+    if (isMounted) {
+      try {
+        const hasCompleted = localStorage.getItem("flow136_tutorial_completed");
+        if (!hasCompleted) {
+          setTutorialStep(1);
+        }
+      } catch (error) {
+        console.error("Local storage access blocked, skipping auto-start tour:", error);
+      }
+    }
+  }, [isMounted]);
+
+  const handleTutorialStepChange = (step: number) => {
+    if (step < 1) return;
+    if (step > 12) {
+      try {
+        localStorage.setItem("flow136_tutorial_completed", "true");
+      } catch (error) {
+        console.error("Local storage set blocked:", error);
+      }
+      setTutorialStep(null);
+      return;
+    }
+    
+    setTutorialStep(step);
+    
+    // Automatic navigation transitions based on the tutorial step
+    if (step === 1) {
+      setShowDashboard(false);
+    } else if (step === 2) {
+      setShowDashboard(true);
+      setWizardStep(1);
+    } else if (step === 3) {
+      setShowDashboard(true);
+      setWizardStep(2);
+    } else if (step === 4) {
+      setShowDashboard(true);
+      setWizardStep(3);
+    } else if (step === 5) {
+      setShowDashboard(true);
+      // Main dashboard view (ensure we are onboarded or showDashboard is true)
+    } else if (step === 6) {
+      setShowDashboard(true);
+    } else if (step === 7) {
+      setShowDashboard(true);
+      setMode('tracker');
+    } else if (step === 8) {
+      setShowDashboard(true);
+      setMode('gpa');
+    } else if (step === 9) {
+      setShowDashboard(true);
+      setMode('gpa');
+      setRoiExpanded(true);
+    } else if (step === 10) {
+      setShowDashboard(true);
+    } else if (step === 11) {
+      setShowDashboard(true);
+    } else if (step === 12) {
+      setShowDashboard(true);
+    }
+  };
 
   // Dynamic scaling for the Academic Progress Snapshot Preview Modal
   useEffect(() => {
@@ -251,7 +345,13 @@ export default function Home() {
 
   // Register Service Worker for PWA (Progressive Web App) support
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    if (
+      typeof window !== 'undefined' && 
+      'serviceWorker' in navigator && 
+      window.location.hostname !== 'localhost' && 
+      window.location.hostname !== '127.0.0.1' && 
+      !window.location.hostname.startsWith('192.168.')
+    ) {
       const registerSW = async () => {
         try {
           const reg = await navigator.serviceWorker.register('/sw.js');
@@ -269,9 +369,39 @@ export default function Home() {
     }
   }, []);
 
-  // Hydration fix & LocalStorage Loader
+  // Hydration fix & LocalStorage Loader & Service Worker Uninstaller for Dev
   useEffect(() => {
     setIsMounted(true);
+
+    // Programmatically unregister and purge any cached files from previous localhost service worker installations
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      if (
+        window.location.hostname === 'localhost' || 
+        window.location.hostname === '127.0.0.1' || 
+        window.location.hostname.startsWith('192.168.')
+      ) {
+        const devPurgeKey = 'flow136_dev_purged';
+        if (!sessionStorage.getItem(devPurgeKey)) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            if (registrations.length > 0) {
+              for (let registration of registrations) {
+                registration.unregister();
+              }
+              if ('caches' in window) {
+                caches.keys().then((names) => {
+                  for (let name of names) {
+                    caches.delete(name);
+                  }
+                });
+              }
+              sessionStorage.setItem(devPurgeKey, 'true');
+              window.location.reload(); // Refresh once to pull fresh uncached client resources
+            }
+          });
+        }
+      }
+    }
+
     try {
       const savedView = localStorage.getItem("flow136_view_mode");
       if (savedView === "list" || savedView === "kanban") {
@@ -595,6 +725,7 @@ export default function Home() {
     localStorage.removeItem("bracu_course_tracker_state");
     localStorage.removeItem("bracu_cse_tracker_welcome_shown");
     localStorage.removeItem("flow136_view_mode");
+    localStorage.removeItem("flow136_tutorial_completed");
     window.location.reload();
   };
 
@@ -811,12 +942,34 @@ export default function Home() {
     updateSemesters(updated);
   };
 
+  // Simulated semesters for the tutorial step 10 to show Repeat ROI boost example
+  const simulatedSemesters = useMemo(() => {
+    if (tutorialStep === 9) {
+      if (semesters.length > 0) {
+        return semesters.map((sem, idx) => {
+          if (idx === 0) {
+            const hasCSE110 = sem.courses.some(c => c.code === "CSE110");
+            const newCourses = hasCSE110
+              ? sem.courses.map(c => c.code === "CSE110" ? { ...c, isCompleted: true, grade: "B-" } : c)
+              : [...sem.courses, { code: "CSE110", isCompleted: true, grade: "B-" }];
+            return {
+              ...sem,
+              courses: newCourses
+            };
+          }
+          return sem;
+        });
+      }
+    }
+    return semesters;
+  }, [semesters, tutorialStep]);
+
   // Unique courses dictionary representing the most recent attempts
   // Needed for "Math Rule" (factoring in only newest attempt into credit count and cumulative CGPA)
   const newestCourseAttempts = useMemo(() => {
     const result: Record<string, { semesterIdx: number; course: SelectedCourse }> = {};
 
-    semesters.forEach((sem, semIdx) => {
+    simulatedSemesters.forEach((sem, semIdx) => {
       sem.courses.forEach(c => {
         // Chronologically latest attempt always replaces any previous attempt
         result[c.code] = { semesterIdx: semIdx, course: c };
@@ -824,7 +977,7 @@ export default function Home() {
     });
 
     return result;
-  }, [semesters]);
+  }, [simulatedSemesters]);
 
   const isCourseMandatory = useCallback((code: string) => {
     const c = COURSES.find(co => co.code === code);
@@ -936,7 +1089,7 @@ export default function Home() {
 
   // Semester GPA calculations (all courses taken in that semester count)
   const semesterStats = useMemo(() => {
-    return semesters.map(sem => {
+    return simulatedSemesters.map(sem => {
       let totalLoad = 0;
       let gradableCredits = 0;
       let totalPoints = 0;
@@ -2068,14 +2221,192 @@ export default function Home() {
     );
   };
 
+  const renderTutorial = () => {
+    if (tutorialStep === null || tutorialStep < 1 || tutorialStep > 12) return null;
+
+    const tourSteps = [
+      {
+        title: "1. Welcome to Flow136!",
+        desc: "Welcome to your curriculum companion. Please click on the 'Continue to Tracker' button on the landing page to enter the app and begin the tour!",
+      },
+      {
+        title: "2. Starting Pathway Status",
+        desc: "First, choose your starting entry point (Pathway A or Pathway B) based on your freshman entry courses, select any remedial options, and click 'Continue'.",
+      },
+      {
+        title: "3. RS & English Placement",
+        desc: "Select your target RS Semester, starting intake (Term & Year), and English status prior to RS, then click 'Next Step' to continue.",
+      },
+      {
+        title: "4. Generate Study Plan",
+        desc: "Review your generated layout summary. If you need to change anything, click 'Back' to adjust details (the tutorial will wait). Once verified, click 'Generate Plan'!",
+      },
+      {
+        title: "5. Welcome to the Dashboard",
+        desc: "Welcome to your active planner dashboard! Notice that Flow136 supports two tracking modes: Course Tracker (left) and Course + CGPA Planner (right). Click 'Next' to proceed.",
+      },
+      {
+        title: "6. Sidebar Requirements",
+        desc: "Look at the sidebar. Click on any category (like 'Program Core' or 'GenEd Streams') to view its courses, track credit completion, or add courses directly.",
+      },
+      {
+        title: "7. CGPA Planner Mode",
+        desc: "Let's explore the GPA calculators. Please switch over to 'Course + CGPA Planner' mode by clicking the toggler in the header.",
+      },
+      {
+        title: "8. GPA Solver & ROI Analyzer",
+        desc: "In GPA mode, you can use the Target Solver to see required grade averages, and the Repeat ROI Analyzer to discover retake choices.",
+      },
+      {
+        title: "9. Repeat ROI Simulation",
+        desc: "For example: we temporarily added CSE110 in Semester 1 with a grade of 2.7 (B-). The analyzer shows that retaking it and scoring a 4.0 (A) will boost your overall CGPA. Click 'Next' to clean up this sample.",
+      },
+      {
+        title: "10. View Layout Modes",
+        desc: "Customize your timeline view. Switch between the vertical 'List View' feed and the horizontal 'Kanban Board' layout in the header. Click 'Next' to proceed.",
+      },
+      {
+        title: "11. Export & Backups",
+        desc: "Open the Hamburger menu (≡) in the header. Here you can backup/export your plan, restore data, or take a gradesheet snapshot of your progress.",
+      },
+      {
+        title: "12. Suggested Pathways",
+        desc: "If you ever get confused, click the 'Feeling lost?' button to see the recommended curriculum pathway flow. That concludes our tour! Click 'Finish' to begin!",
+      },
+    ];
+
+    const currentStepData = tourSteps[tutorialStep - 1];
+    if (!currentStepData) return null;
+
+    let stepTitle = currentStepData.title;
+    let stepDesc = currentStepData.desc;
+
+    // Boundary correction: If user went back in the wizard on step 4, pause instructions
+    if (tutorialStep === 4 && wizardStep < 3) {
+      stepTitle = "Adjusting Onboarding Settings...";
+      stepDesc = "Please finish adjusting your choices in the setup wizard and click 'Continue' to return to the 'Generate Your Study Plan' page to resume the tour.";
+    }
+
+    const isNextHidden = [2, 3, 4].includes(tutorialStep) && !isOnboarded;
+
+    return (
+      <div className="fixed bottom-4 md:bottom-6 right-4 md:right-6 left-4 md:left-auto md:w-96 z-[9999] px-4 md:px-0">
+        <div className="bg-[#09090b]/95 border border-slate-800 backdrop-blur-md rounded-2xl p-5 shadow-[0_0_30px_rgba(99,102,241,0.15)] flex flex-col gap-3 relative overflow-hidden text-left">
+          {/* Ambient glow inside popover */}
+          <div className="absolute -top-10 -left-10 w-24 h-24 rounded-full bg-indigo-500/10 blur-xl pointer-events-none" />
+          
+          <div className="flex items-center justify-between z-10">
+            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+              Tutorial &bull; Step {tutorialStep} of {tourSteps.length}
+            </span>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.setItem("flow136_tutorial_completed", "true");
+                } catch (error) {
+                  console.error("Local storage error:", error);
+                }
+                setTutorialStep(null);
+              }}
+              className="text-slate-450 hover:text-indigo-400 transition text-[10px] uppercase font-bold cursor-pointer"
+            >
+              Skip
+            </button>
+          </div>
+
+          <div className="space-y-1 z-10">
+            <h4 className="text-sm font-bold text-slate-100">{stepTitle}</h4>
+            <p className="text-xs text-slate-300 leading-relaxed">{stepDesc}</p>
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden z-10 border border-slate-800/40">
+            <div 
+              className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full transition-all duration-300"
+              style={{ width: `${(tutorialStep / tourSteps.length) * 100}%` }}
+            />
+          </div>
+
+          <div className="flex justify-between items-center mt-2 z-10">
+            <button
+              disabled={tutorialStep === 1 || (isOnboarded && tutorialStep === 5)}
+              onClick={() => handleTutorialStepChange(tutorialStep - 1)}
+              className="px-3 py-1.5 rounded-lg border border-slate-800 bg-zinc-900/50 hover:bg-zinc-800 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer transition disabled:opacity-30 disabled:pointer-events-none"
+            >
+              Back
+            </button>
+            {isNextHidden ? (
+              <span className="text-[10px] font-medium text-slate-400 italic animate-pulse">
+                Follow instructions to proceed...
+              </span>
+            ) : (
+              <button
+                onClick={() => handleTutorialStepChange(tutorialStep + 1)}
+                className="bg-indigo-600 hover:bg-indigo-500 text-slate-100 px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-md transition-all duration-200 shadow-indigo-600/10 hover:shadow-indigo-600/20"
+              >
+                {tutorialStep === tourSteps.length ? "Finish" : "Next"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
   if (!isMounted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#08080a] text-slate-100 font-sans">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <GraduationCap className="h-16 w-16 text-indigo-500 animate-pulse" />
-          <h1 className="text-xl font-bold tracking-tight">Loading Flow136...</h1>
-          <p className="text-slate-400 text-sm">Organizing your degree curriculum...</p>
-        </div>
+      <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden animate-pulse">
+        {/* Header Skeleton */}
+        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-slate-900/50 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="h-8.5 w-8.5 rounded-xl bg-slate-800/50" />
+            <div className="space-y-1.5">
+              <div className="h-4.5 w-20 bg-slate-800/60 rounded" />
+              <div className="h-3 w-40 bg-slate-800/40 rounded" />
+            </div>
+          </div>
+          <div className="h-8 w-24 bg-slate-800/50 rounded-xl" />
+        </header>
+
+        {/* Hero Section Skeleton */}
+        <main className="flex-grow flex flex-col items-center justify-center text-center px-4 py-16 relative z-10 max-w-6xl mx-auto w-full">
+          {/* Badge Skeleton */}
+          <div className="h-7 w-48 bg-slate-800/45 rounded-full mb-8" />
+
+          {/* Title Skeleton */}
+          <div className="h-16 w-3/4 max-w-xl bg-slate-800/60 rounded-2xl mb-6 mx-auto" />
+          
+          {/* Subtitle Skeletons */}
+          <div className="space-y-2.5 mb-10 w-2/3 max-w-md mx-auto">
+            <div className="h-6 w-full bg-slate-800/50 rounded-lg mx-auto" />
+            <div className="h-5 w-5/6 bg-slate-800/30 rounded-lg mx-auto" />
+          </div>
+
+          {/* Button Skeleton */}
+          <div className="h-14 w-52 bg-slate-800/70 rounded-full mb-20 mx-auto" />
+
+          {/* Grid Skeleton */}
+          <div className="w-full">
+            <div className="h-4 w-28 bg-slate-800/40 rounded mx-auto mb-10" />
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="bg-zinc-950/40 border border-slate-800/80 rounded-xl p-6 flex flex-col items-center">
+                  <div className="h-12 w-12 rounded-xl bg-slate-800/50 mb-4" />
+                  <div className="h-4 w-24 bg-slate-800/60 rounded mb-2.5" />
+                  <div className="space-y-1.5 w-full">
+                    <div className="h-3 w-full bg-slate-800/35 rounded" />
+                    <div className="h-3 w-5/6 bg-slate-800/30 rounded mx-auto" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+        
+        {/* Footer Skeleton */}
+        <footer className="px-6 py-6 border-t border-slate-900/50 max-w-7xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="h-3.5 w-36 bg-slate-800/30 rounded" />
+          <div className="h-3.5 w-44 bg-slate-800/30 rounded" />
+        </footer>
       </div>
     );
   }
@@ -2086,23 +2417,21 @@ export default function Home() {
     return (
       <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
         {/* Glow ambient background lights */}
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[150px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/10 blur-[150px] pointer-events-none" />
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/15 blur-[150px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/15 blur-[150px] pointer-events-none" />
+        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] rounded-full bg-indigo-500/10 blur-[140px] pointer-events-none z-0" />
 
         {/* Top Header/Bar for Landing */}
         <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-slate-800/40 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
               <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                Flow136
-              </h1>
-              <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
-            </div>
+            <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              Flow136
+            </h1>
           </div>
         </header>
 
@@ -2113,24 +2442,28 @@ export default function Home() {
             <span>BRACU CSE Degree Companion</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300 max-w-4xl mx-auto leading-[1.1] mb-6">
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300 max-w-5xl mx-auto leading-none mb-6">
             Welcome to Flow136
           </h1>
 
-          <div className="max-w-2xl mx-auto mb-10 flex flex-col items-center">
-            <p className="text-xl md:text-2xl text-slate-100 font-semibold leading-relaxed">
-              Your curriculum, minus the complexity.
-            </p>
-            <p className="text-base md:text-lg text-slate-400 font-medium mt-2 leading-relaxed">
-              A progress tracker for BRACU CSE Undergrads.
-            </p>
-          </div>
+          <p className="text-xl md:text-2xl lg:text-3xl text-slate-100 font-extrabold tracking-tight max-w-2xl mx-auto leading-relaxed text-center">
+            Your curriculum, minus the complexity.
+          </p>
+
+          <p className="text-xs md:text-sm text-slate-450 font-semibold mt-3 mb-10 max-w-md mx-auto leading-relaxed text-center">
+            A progress tracker for BRACU CSE Undergrads.
+          </p>
 
           {/* Glowing CTA Button */}
           <div className="mb-20">
             <button
-              onClick={() => setShowDashboard(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-slate-100 shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5"
+              onClick={() => {
+                setShowDashboard(true);
+                if (tutorialStep === 1) {
+                  handleTutorialStepChange(2);
+                }
+              }}
+              className={`bg-indigo-600 hover:bg-indigo-500 text-slate-100 shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5 ${getHighlightClass('cta-button')}`}
             >
               <span>Continue to Tracker</span>
               <ArrowRight className="h-5 w-5" />
@@ -2146,56 +2479,56 @@ export default function Home() {
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
               {/* Feature 1 */}
-              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 transition-all">
+              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-slate-800/80 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 group-hover:scale-110 transition-all duration-300">
                   <GraduationCap className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA Tracker</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-450 leading-relaxed font-medium">
                   Log grades, track semester GPAs, and monitor cumulative progress dynamically.
                 </p>
               </div>
 
               {/* Feature 2 */}
-              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-slate-800 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 transition-all">
+              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-slate-800/80 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 group-hover:scale-110 transition-all duration-300">
                   <BookOpen className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">GenEd Progress Tracker</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-450 leading-relaxed font-medium">
                   Auto-validate GenEd stream distributions and ensure all graduation credits align.
                 </p>
               </div>
 
               {/* Feature 3 */}
-              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 transition-all">
+              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all duration-300">
                   <TrendingUp className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA ROI Analyzer</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-450 leading-relaxed font-medium">
                   Analyze retake options and see the exact return on investment for grade improvements.
                 </p>
               </div>
 
               {/* Feature 4 */}
-              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 mb-4 group-hover:bg-pink-500/20 transition-all">
+              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 mb-4 group-hover:bg-pink-500/20 group-hover:scale-110 transition-all duration-300">
                   <Target className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">Target CGPA Calculator</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-450 leading-relaxed font-medium">
                   Solve exactly what GPAs you need in future semesters to reach your target goals.
                 </p>
               </div>
 
               {/* Feature 5 */}
-              <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-slate-800 transition-all duration-300 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 transition-all">
+              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
+                <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 group-hover:scale-110 transition-all duration-300">
                   <Camera className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">Snapshot Progress</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-450 leading-relaxed font-medium">
                   Instantly download your official curriculum progress as a crisp PNG image.
                 </p>
               </div>
@@ -2238,6 +2571,7 @@ export default function Home() {
             Disclaimer: Not officially affiliated with BRAC University. All curriculum guidelines and course codes reflect official CSE program requirements.
           </p>
         </footer>
+        {renderTutorial()}
       </div>
     );
   }
@@ -2258,16 +2592,13 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                Flow136
-              </h1>
-              <p className="text-xs text-purple-400 font-medium tracking-wide">Your curriculum, minus the complexity.</p>
-            </div>
+            <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              Flow136
+            </h1>
           </div>
 
           {/* Center: Mode Toggler (Dead Center) */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex">
+          <div className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex ${getHighlightClass('mode-toggler')}`}>
             <button
               onClick={() => mode !== 'tracker' && handleModeToggle()}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -2279,7 +2610,14 @@ export default function Home() {
               Course Tracker Only
             </button>
             <button
-              onClick={() => mode !== 'gpa' && handleModeToggle()}
+              onClick={() => {
+                if (mode !== 'gpa') {
+                  handleModeToggle();
+                  if (tutorialStep === 7) {
+                    handleTutorialStepChange(8);
+                  }
+                }
+              }}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'gpa' 
                   ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
@@ -2295,7 +2633,7 @@ export default function Home() {
             {/* 1. Feeling lost? */}
             <button
               onClick={() => setShowRoadmapModal(true)}
-              className="inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-sm"
+              className={`inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
               title="View recommended CSE/CS curriculum roadmap"
             >
               <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
@@ -2313,7 +2651,7 @@ export default function Home() {
                   showDataDropdown 
                     ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
                     : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
-                }`}
+                } ${getHighlightClass('hamburger-menu')}`}
                 title="Menu"
               >
                 <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
@@ -2356,6 +2694,17 @@ export default function Home() {
                     <Camera className="h-3.5 w-3.5 text-indigo-400" />
                     <span>Snapshot Progress</span>
                   </button>
+                  <button
+                    onClick={() => {
+                      setTutorialStep(5);
+                      setShowDashboard(true);
+                      setShowDataDropdown(false);
+                    }}
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Restart Tour</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -2375,26 +2724,21 @@ export default function Home() {
           {/* 1. Logo and Catchphrase */}
           <div 
             onClick={() => setShowDashboard(false)}
-            className="flex flex-col items-center gap-1.5 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
+            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
             title="Back to Landing Page"
           >
-            {/* Logo and Flow136 text in one line */}
-            <div className="flex items-center gap-3">
-              <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
-                <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                </svg>
-              </div>
-              <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
-                Flow136
-              </h1>
+            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
+              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+              </svg>
             </div>
-            {/* Catchphrase under flow 136, centered */}
-            <p className="text-[10px] text-purple-400 font-semibold tracking-wide mt-0.5">Your curriculum, minus the complexity.</p>
+            <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+              Flow136
+            </h1>
           </div>
 
           {/* 2. Mode Toggler */}
-          <div className="bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex w-full max-w-[320px] justify-between">
+          <div className={`bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex w-full max-w-[320px] justify-between ${getHighlightClass('mode-toggler')}`}>
             <button
               onClick={() => mode !== 'tracker' && handleModeToggle()}
               className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
@@ -2406,7 +2750,14 @@ export default function Home() {
               Course Tracker Only
             </button>
             <button
-              onClick={() => mode !== 'gpa' && handleModeToggle()}
+              onClick={() => {
+                if (mode !== 'gpa') {
+                  handleModeToggle();
+                  if (tutorialStep === 7) {
+                    handleTutorialStepChange(8);
+                  }
+                }
+              }}
               className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
                 mode === 'gpa' 
                   ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
@@ -2422,7 +2773,7 @@ export default function Home() {
             {/* Help/Roadmap Button */}
             <button
               onClick={() => setShowRoadmapModal(true)}
-              className="h-10 w-10 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm"
+              className={`h-10 w-10 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
               title="View recommended CSE/CS curriculum roadmap"
             >
               <HelpCircle className="h-4.5 w-4.5 text-indigo-400" />
@@ -2448,7 +2799,7 @@ export default function Home() {
                   showHeaderMenu 
                     ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
                     : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
-                }`}
+                } ${getHighlightClass('hamburger-menu')}`}
                 title="Menu"
               >
                 <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
@@ -2490,6 +2841,17 @@ export default function Home() {
                   >
                     <Camera className="h-3.5 w-3.5 text-indigo-400" />
                     <span>Snapshot Progress</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTutorialStep(5);
+                      setShowDashboard(true);
+                      setShowHeaderMenu(false);
+                    }}
+                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Restart Tour</span>
                   </button>
                 </div>
               )}
@@ -2599,7 +2961,7 @@ export default function Home() {
                         onboardingData.pathway === 'foundation'
                           ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                           : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                      }`}
+                      } ${getHighlightClass('pathway-card-a')}`}
                     >
                       <BookOpen className="h-4.5 w-4.5" />
                       <div>
@@ -2619,7 +2981,7 @@ export default function Home() {
                         onboardingData.pathway === 'credit'
                           ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                           : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                      }`}
+                      } ${getHighlightClass('pathway-card-b')}`}
                     >
                       <Award className="h-4.5 w-4.5" />
                       <div>
@@ -2745,7 +3107,12 @@ export default function Home() {
 
                 <div className="flex justify-end pt-2">
                   <button
-                    onClick={() => setWizardStep(2)}
+                    onClick={() => {
+                      setWizardStep(2);
+                      if (tutorialStep === 2) {
+                        handleTutorialStepChange(3);
+                      }
+                    }}
                     disabled={!onboardingData.pathway}
                     className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
                   >
@@ -2778,7 +3145,7 @@ export default function Home() {
                             onboardingData.rsTerm === term
                               ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                               : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                          }`}
+                          } ${getHighlightClass('rs-term-select')}`}
                         >
                           {term}
                         </button>
@@ -2793,7 +3160,7 @@ export default function Home() {
                       <select
                         value={onboardingData.startingTerm}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
-                        className="w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                        className={`w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer ${getHighlightClass('starting-intake-select')}`}
                       >
                         <option value="Spring">Spring</option>
                         <option value="Summer">Summer</option>
@@ -2803,7 +3170,7 @@ export default function Home() {
                       <select
                         value={onboardingData.startingYear}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingYear: parseInt(e.target.value) })}
-                        className="w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                        className={`w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer ${getHighlightClass('starting-intake-select')}`}
                       >
                         {Array.from({ length: 11 }, (_, i) => 2020 + i).map(year => (
                           <option key={year} value={year}>{year}</option>
@@ -2827,7 +3194,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseA'
                                 ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                                 : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                            }`}
+                            } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
                               <p className="text-slate-100 font-semibold text-xs">Have not completed ENG102 before RS (will take ENG102 during RS)</p>
@@ -2842,7 +3209,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseD'
                                 ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                                 : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                            }`}
+                            } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
                               <p className="text-slate-100 font-semibold text-xs">Completed ENG102 before RS</p>
@@ -2859,7 +3226,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseA'
                                 ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                                 : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                            }`}
+                            } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
                               <p className="text-slate-100 font-semibold text-xs">Passed ENG101, but NOT ENG102 before RS</p>
@@ -2874,7 +3241,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseB'
                                 ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                                 : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                            }`}
+                            } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
                               <p className="text-slate-100 font-semibold text-xs">Passed ENG101 and ENG102 before RS</p>
@@ -2889,7 +3256,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseC'
                                 ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                                 : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
-                            }`}
+                            } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
                               <p className="text-slate-100 font-semibold text-xs">Failed ENG101 before RS</p>
@@ -2914,6 +3281,9 @@ export default function Home() {
                     onClick={() => {
                       if (onboardingData.engStatusPriorToRS) {
                         setWizardStep(3);
+                        if (tutorialStep === 3) {
+                          handleTutorialStepChange(4);
+                        }
                       }
                     }}
                     disabled={!onboardingData.engStatusPriorToRS}
@@ -2980,8 +3350,13 @@ export default function Home() {
                     Back
                   </button>
                   <button
-                    onClick={generateInitialPlan}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
+                    onClick={() => {
+                      generateInitialPlan();
+                      if (tutorialStep === 4) {
+                        handleTutorialStepChange(5);
+                      }
+                    }}
+                    className={`px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20 ${getHighlightClass('generate-plan-btn')}`}
                   >
                     Generate Plan
                   </button>
@@ -3054,7 +3429,7 @@ export default function Home() {
                     </div>
 
                     {/* Target CGPA Solver Widget */}
-                    <div className="bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className={`bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('gpa-solver-card')}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
@@ -3094,7 +3469,7 @@ export default function Home() {
                     </div>
 
                     {/* Repeat ROI Analyzer Widget */}
-                    <div className="bg-zinc-900/15 border border-slate-800/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className={`bg-zinc-900/15 border border-slate-800/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('roi-analyzer')}`}>
                       <div className="p-5 flex items-center justify-between border-b border-slate-800/40 bg-zinc-950/20">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
@@ -3161,7 +3536,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('core')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-core')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-350 font-semibold">Program Core (Mandatory)</span>
@@ -3177,7 +3552,7 @@ export default function Home() {
 
                     {/* Capstone Thesis */}
                     <div
-                      className="w-full bg-zinc-900/15 border border-slate-800/40 rounded-xl p-3.5 flex flex-col gap-2"
+                      className={`w-full bg-zinc-900/15 border border-slate-800/40 rounded-xl p-3.5 flex flex-col gap-2 ${getHighlightClass('category-thesis')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">Capstone Thesis (CSE400)</span>
@@ -3195,7 +3570,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('schoolCore')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-school')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">School Core (Math &amp; Sciences)</span>
@@ -3213,7 +3588,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('electives')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-electives')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-355 font-semibold">CSE Major Electives</span>
@@ -3236,7 +3611,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream1')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-slate-400">GenEd Stream 1 (Writing Comprehension)</span>
@@ -3254,7 +3629,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream2')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-slate-400">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
@@ -3272,7 +3647,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream3')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-slate-400">GenEd Stream 3 (Arts &amp; Humanities)</span>
@@ -3290,7 +3665,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream4')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-slate-400">GenEd Stream 4 (Social Sciences)</span>
@@ -3308,7 +3683,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream5')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-slate-400">GenEd Stream 5 (Communities / CST)</span>
@@ -3326,7 +3701,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('freeGenEd')}
-                      className="w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none"
+                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-slate-400">GenEd Electives (Free Choice)</span>
@@ -3354,7 +3729,7 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-2">
                 {/* View Switcher Toggle (Hidden on mobile) */}
-                <div className="hidden md:flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner mr-2">
+                <div className={`hidden md:flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner mr-2 ${getHighlightClass('layout-toggles')}`}>
                   <button
                     onClick={() => handleToggleViewMode("list")}
                     title="List Feed"
@@ -3397,7 +3772,7 @@ export default function Home() {
 
             {/* List of Semester Cards */}
             <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-3 px-1 items-stretch snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
-              {semesters.map((sem, semIdx) => {
+              {simulatedSemesters.map((sem, semIdx) => {
                 const stats = semesterStats.find(s => s.id === sem.id);
                 const hasCSE400 = sem.courses.some(c => c.code === "CSE400");
                 const isSemester9Plus = semIdx >= 8; // index 8 is the 9th semester card
@@ -3421,12 +3796,15 @@ export default function Home() {
                       currentLayout === 'kanban' 
                         ? `w-[340px] min-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] ${sem.isCollapsed ? 'self-start' : ''}` 
                         : ""
-                    } bg-zinc-900/70 border rounded-xl overflow-visible shadow-xl backdrop-blur-md hover:border-slate-800 transition-all duration-300 ${
+                    } border rounded-xl overflow-visible shadow-xl backdrop-blur-md hover:border-slate-700/80 transition-all duration-300 relative ${
                       draggingCourseCode && dragOverSemesterId === sem.id 
                         ? "border-dashed border-2 border-indigo-500 bg-indigo-500/5 shadow-[0_0_20px_rgba(99,102,241,0.15)]" 
-                        : "border-slate-800"
+                        : sem.isRS 
+                          ? "border-indigo-500/25 bg-indigo-950/10 shadow-[0_0_15px_rgba(99,102,241,0.02)]" 
+                          : "border-slate-800/80 bg-zinc-950/40"
                     }`}
                   >
+                    <div className="absolute top-0 right-0 h-28 w-28 bg-indigo-500/[0.015] rounded-full blur-2xl pointer-events-none" />
                                   {/* Semester Card Header */}
                     <div className={`bg-white/[0.02] px-4 py-4 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-slate-800/40"}`}>
                       <div className="flex items-center gap-2.5 flex-wrap">
@@ -4029,7 +4407,7 @@ export default function Home() {
               </button>
               <button
                 onClick={handleResetData}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-slate-100 text-xs font-semibold rounded-xl shadow-lg transition"
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-semibold rounded-xl shadow-lg transition duration-200 cursor-pointer shadow-indigo-600/10 hover:shadow-indigo-600/20"
               >
                 Wipe Data & Reset
               </button>
@@ -4714,6 +5092,7 @@ export default function Home() {
           </div>
         </div>
       )}
+      {renderTutorial()}
     </div>
   );
 }

@@ -30,6 +30,15 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Only cache GET requests, and bypass dev HMR or WebSockets
+  if (
+    event.request.method !== 'GET' ||
+    event.request.url.includes('/_next/') ||
+    event.request.url.includes('webpack')
+  ) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
