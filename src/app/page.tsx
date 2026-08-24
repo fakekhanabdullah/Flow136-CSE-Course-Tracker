@@ -231,6 +231,78 @@ export default function Home() {
   const [snapshotScale, setSnapshotScale] = useState<number>(1);
   const [snapshotHeight, setSnapshotHeight] = useState<number>(700);
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({
+    position: 'fixed',
+    bottom: '24px',
+    right: '24px',
+    zIndex: 9999
+  });
+
+  useEffect(() => {
+    if (tutorialStep === null || !isMounted) return;
+
+    const updatePosition = () => {
+      const isWizard = [2, 3, 4].includes(tutorialStep);
+      const isMd = window.innerWidth >= 768;
+
+      if (isWizard) {
+        if (isMd) {
+          // Desktop Wizard: Place in bottom-left corner of screen to avoid clashing with centered modal layout
+          setPopoverStyle({
+            position: 'fixed',
+            bottom: '24px',
+            left: '24px',
+            right: 'auto',
+            top: 'auto',
+            zIndex: 9999,
+            width: '384px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          });
+        } else {
+          // Mobile Wizard: Place at the very top of screen to keep bottom action buttons completely accessible
+          setPopoverStyle({
+            position: 'fixed',
+            top: '16px',
+            left: '16px',
+            right: '16px',
+            bottom: 'auto',
+            zIndex: 9999,
+            width: 'calc(100vw - 32px)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          });
+        }
+      } else {
+        // All other steps (Landing + Timeline Dashboard): Standard fixed bottom-right layout
+        if (isMd) {
+          setPopoverStyle({
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            left: 'auto',
+            top: 'auto',
+            zIndex: 9999,
+            width: '384px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          });
+        } else {
+          setPopoverStyle({
+            position: 'fixed',
+            bottom: '16px',
+            left: '16px',
+            right: '16px',
+            top: 'auto',
+            zIndex: 9999,
+            width: 'calc(100vw - 32px)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          });
+        }
+      }
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    return () => window.removeEventListener('resize', updatePosition);
+  }, [tutorialStep, isMounted]);
 
   // Auto-start tutorial on user's first time
   useEffect(() => {
@@ -1925,7 +1997,7 @@ export default function Home() {
         <div className={`flex flex-wrap items-center justify-between gap-3 ${isCollapsed ? "" : "border-b border-slate-800/80 pb-4 mb-6"}`}>
           <div>
             <h3 className="font-extrabold text-base text-slate-100 tracking-tight flex items-center gap-2">
-              <Award className="h-5 w-5 text-purple-400" />
+              <FileText className="h-4.5 w-4.5 text-indigo-400" />
               CSE400
             </h3>
             <p className="text-xs text-zinc-450 mt-1">Final Year Capstone: Thesis, Project, or Internship</p>
@@ -2290,7 +2362,7 @@ export default function Home() {
     const isNextHidden = [2, 3, 4].includes(tutorialStep) && !isOnboarded;
 
     return (
-      <div className="fixed bottom-4 md:bottom-6 right-4 md:right-6 left-4 md:left-auto md:w-96 z-[9999] px-4 md:px-0">
+      <div style={popoverStyle} className="w-[calc(100vw-32px)] md:w-96 px-4 md:px-0">
         <div className="bg-[#09090b]/95 border border-slate-800 backdrop-blur-md rounded-2xl p-5 shadow-[0_0_30px_rgba(99,102,241,0.15)] flex flex-col gap-3 relative overflow-hidden text-left">
           {/* Ambient glow inside popover */}
           <div className="absolute -top-10 -left-10 w-24 h-24 rounded-full bg-indigo-500/10 blur-xl pointer-events-none" />
@@ -2424,8 +2496,8 @@ export default function Home() {
         {/* Top Header/Bar for Landing */}
         <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-slate-800/40 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
-              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)] shrink-0">
+              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
@@ -2464,6 +2536,7 @@ export default function Home() {
                 }
               }}
               className={`bg-indigo-600 hover:bg-indigo-500 text-slate-100 shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5 ${getHighlightClass('cta-button')}`}
+              data-tutorial="cta-button"
             >
               <span>Continue to Tracker</span>
               <ArrowRight className="h-5 w-5" />
@@ -2587,8 +2660,8 @@ export default function Home() {
             className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all relative z-20 shrink-0"
             title="Back to Landing Page"
           >
-            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)] shrink-0">
+              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
@@ -2598,12 +2671,15 @@ export default function Home() {
           </div>
 
           {/* Center: Mode Toggler (Dead Center) */}
-          <div className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex ${getHighlightClass('mode-toggler')}`}>
+          <div 
+            className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex ${getHighlightClass('mode-toggler')}`}
+            data-tutorial="mode-toggler"
+          >
             <button
               onClick={() => mode !== 'tracker' && handleModeToggle()}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'tracker' 
-                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
                   : 'text-slate-400 hover:text-slate-100'
               }`}
             >
@@ -2620,7 +2696,7 @@ export default function Home() {
               }}
               className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 mode === 'gpa' 
-                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
                   : 'text-slate-400 hover:text-slate-100'
               }`}
             >
@@ -2635,6 +2711,7 @@ export default function Home() {
               onClick={() => setShowRoadmapModal(true)}
               className={`inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
               title="View recommended CSE/CS curriculum roadmap"
+              data-tutorial="feeling-lost-btn"
             >
               <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
               <span>Feeling lost?</span>
@@ -2653,6 +2730,7 @@ export default function Home() {
                     : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
                 } ${getHighlightClass('hamburger-menu')}`}
                 title="Menu"
+                data-tutorial="hamburger-menu"
               >
                 <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -2727,8 +2805,8 @@ export default function Home() {
             className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
             title="Back to Landing Page"
           >
-            <div className="h-8.5 w-8.5 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
-              <svg className="h-4.5 w-4.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)] shrink-0">
+              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
@@ -2738,12 +2816,15 @@ export default function Home() {
           </div>
 
           {/* 2. Mode Toggler */}
-          <div className={`bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex w-full max-w-[320px] justify-between ${getHighlightClass('mode-toggler')}`}>
+          <div 
+            className={`bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex w-full max-w-[320px] justify-between ${getHighlightClass('mode-toggler')}`}
+            data-tutorial="mode-toggler"
+          >
             <button
               onClick={() => mode !== 'tracker' && handleModeToggle()}
               className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
                 mode === 'tracker' 
-                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
                   : 'text-slate-400 hover:text-slate-100'
               }`}
             >
@@ -2760,7 +2841,7 @@ export default function Home() {
               }}
               className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
                 mode === 'gpa' 
-                  ? 'bg-purple-950/20 text-purple-400 border border-slate-800 shadow-md' 
+                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
                   : 'text-slate-400 hover:text-slate-100'
               }`}
             >
@@ -2775,6 +2856,7 @@ export default function Home() {
               onClick={() => setShowRoadmapModal(true)}
               className={`h-10 w-10 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
               title="View recommended CSE/CS curriculum roadmap"
+              data-tutorial="feeling-lost-btn"
             >
               <HelpCircle className="h-4.5 w-4.5 text-indigo-400" />
             </button>
@@ -2801,6 +2883,7 @@ export default function Home() {
                     : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
                 } ${getHighlightClass('hamburger-menu')}`}
                 title="Menu"
+                data-tutorial="hamburger-menu"
               >
                 <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
@@ -2962,6 +3045,7 @@ export default function Home() {
                           ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                           : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       } ${getHighlightClass('pathway-card-a')}`}
+                      data-tutorial="pathway-card-a"
                     >
                       <BookOpen className="h-4.5 w-4.5" />
                       <div>
@@ -2982,6 +3066,7 @@ export default function Home() {
                           ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
                           : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
                       } ${getHighlightClass('pathway-card-b')}`}
+                      data-tutorial="pathway-card-b"
                     >
                       <Award className="h-4.5 w-4.5" />
                       <div>
@@ -3136,7 +3221,7 @@ export default function Home() {
                   {/* Select RS Term */}
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold tracking-wider text-slate-400">When will you attend RS?</label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-2" data-tutorial="rs-term-select">
                       {(["3rd Semester", "4th Semester", "5th Semester"] as const).map(term => (
                         <button
                           key={term}
@@ -3161,6 +3246,7 @@ export default function Home() {
                         value={onboardingData.startingTerm}
                         onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
                         className={`w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer ${getHighlightClass('starting-intake-select')}`}
+                        data-tutorial="starting-intake-select"
                       >
                         <option value="Spring">Spring</option>
                         <option value="Summer">Summer</option>
@@ -3184,7 +3270,7 @@ export default function Home() {
                     <label className="block text-xs font-semibold tracking-wider text-slate-400">
                       English status prior to RS:
                     </label>
-                    <div className="space-y-2.5">
+                    <div className="space-y-2.5" data-tutorial="english-status-select">
                       
                       {onboardingData.creditOption === 'opt2' ? (
                         <>
@@ -3357,6 +3443,7 @@ export default function Home() {
                       }
                     }}
                     className={`px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20 ${getHighlightClass('generate-plan-btn')}`}
+                    data-tutorial="generate-plan-btn"
                   >
                     Generate Plan
                   </button>
@@ -3392,7 +3479,7 @@ export default function Home() {
                     <div className="h-3 w-full bg-zinc-900 border border-slate-800 rounded-full overflow-hidden p-0.5">
                       <div 
                         style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-full transition-all duration-500"
                       />
                     </div>
                   </div>
@@ -3429,7 +3516,10 @@ export default function Home() {
                     </div>
 
                     {/* Target CGPA Solver Widget */}
-                    <div className={`bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('gpa-solver-card')}`}>
+                    <div 
+                      className={`bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('gpa-solver-card')}`}
+                      data-tutorial="gpa-solver-card"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
@@ -3469,7 +3559,10 @@ export default function Home() {
                     </div>
 
                     {/* Repeat ROI Analyzer Widget */}
-                    <div className={`bg-zinc-900/15 border border-slate-800/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('roi-analyzer')}`}>
+                    <div 
+                      className={`bg-zinc-900/15 border border-slate-800/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('roi-analyzer')}`}
+                      data-tutorial="roi-analyzer"
+                    >
                       <div className="p-5 flex items-center justify-between border-b border-slate-800/40 bg-zinc-950/20">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
@@ -3537,6 +3630,7 @@ export default function Home() {
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('core')}
                       className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-core')}`}
+                      data-tutorial="category-core"
                     >
                       <div className="w-full flex justify-between text-[11px]">
                         <span className="text-zinc-350 font-semibold">Program Core (Mandatory)</span>
@@ -3561,7 +3655,7 @@ export default function Home() {
                       <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.thesisCompleted / curriculumProgress.thesisTotal) * 100}%` }}
-                          className="h-full bg-purple-500/80 rounded-full transition-all duration-300"
+                          className="h-full bg-indigo-500/80 rounded-full transition-all duration-300"
                         />
                       </div>
                     </div>
@@ -3579,7 +3673,7 @@ export default function Home() {
                       <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
                         <div 
                           style={{ width: `${(curriculumProgress.schoolCoreCompleted / curriculumProgress.schoolCoreTotal) * 100}%` }}
-                          className="h-full bg-purple-500 rounded-full transition-all duration-300"
+                          className="h-full bg-indigo-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3722,14 +3816,18 @@ export default function Home() {
           <main className="flex-1 lg:overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-0">
             
             {/* Semester timelines header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-indigo-400" />
+            <div className="grid grid-cols-3 items-center border-b border-slate-800 pb-2">
+              {/* Left Column: Title */}
+              <div className="flex justify-start">
                 <h2 className="text-base font-bold tracking-tight text-slate-100">Semester Planner</h2>
               </div>
-              <div className="flex items-center gap-2">
-                {/* View Switcher Toggle (Hidden on mobile) */}
-                <div className={`hidden md:flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner mr-2 ${getHighlightClass('layout-toggles')}`}>
+
+              {/* Center Column: View Switcher Toggle */}
+              <div className="flex justify-center">
+                <div 
+                  className={`flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner ${getHighlightClass('layout-toggles')}`}
+                  data-tutorial="layout-toggles"
+                >
                   <button
                     onClick={() => handleToggleViewMode("list")}
                     title="List Feed"
@@ -3753,19 +3851,43 @@ export default function Home() {
                     <Columns className="h-3.5 w-3.5" />
                   </button>
                 </div>
+              </div>
 
+              {/* Right Column: Actions */}
+              <div className="flex justify-end items-center gap-2">
                 <button
                   onClick={handleToggleAllCollapse}
-                  className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-100 hover:text-slate-100 text-xs font-semibold px-3 py-1.5 rounded-lg transition whitespace-nowrap"
+                  className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-350 hover:text-indigo-400 p-2 rounded-xl transition flex items-center justify-center h-8 w-8 shrink-0 cursor-pointer"
+                  title={isAnyExpanded ? "Collapse All" : "Expand All"}
                 >
-                  {isAnyExpanded ? "Collapse All" : "Expand All"}
+                  {isAnyExpanded ? (
+                    <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      {/* 3 List lines */}
+                      <line x1="3" y1="6" x2="13" y2="6" />
+                      <line x1="3" y1="12" x2="13" y2="12" />
+                      <line x1="3" y1="18" x2="13" y2="18" />
+                      {/* Arrows pointing inward */}
+                      <path d="M18 4V10M18 10L15 7M18 10L21 7" />
+                      <path d="M18 20V14M18 14L15 17M18 14L21 17" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      {/* 3 List lines */}
+                      <line x1="3" y1="6" x2="13" y2="6" />
+                      <line x1="3" y1="12" x2="13" y2="12" />
+                      <line x1="3" y1="18" x2="13" y2="18" />
+                      {/* Arrows pointing outward */}
+                      <path d="M18 10V4M18 4L15 7M18 4L21 7" />
+                      <path d="M18 14V20M18 20L15 17M18 20L21 17" />
+                    </svg>
+                  )}
                 </button>
                 <button
                   onClick={handleAddSemester}
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-slate-100 text-xs font-semibold px-4 py-1.5 rounded-xl shadow-md transition whitespace-nowrap"
+                  className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-slate-100 rounded-xl shadow-md transition whitespace-nowrap h-8 w-8 shrink-0 cursor-pointer"
+                  title="Add New Semester"
                 >
-                  <Plus className="h-4 w-4" />
-                  <span>Add Semester</span>
+                  <Plus className="h-4.5 w-4.5 shrink-0 stroke-[2.2]" />
                 </button>
               </div>
             </div>
@@ -3850,7 +3972,7 @@ export default function Home() {
                           </div>
                         </h3>
                         {sem.isRS ? (
-                          <span className="text-[9px] font-bold bg-purple-500/10 border border-slate-800 text-purple-400 px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
+                          <span className="text-[9px] font-bold bg-indigo-500/10 border border-slate-800 text-indigo-400 px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
                             RS
                           </span>
                         ) : (
