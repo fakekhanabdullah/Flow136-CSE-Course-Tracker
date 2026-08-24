@@ -3458,7 +3458,7 @@ export default function Home() {
           <div className="flex-1 flex flex-col lg:flex-row gap-6">
             
             {/* A. LEFT SIDEBAR: Degree Progress & Statistics */}
-            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-32px)] flex flex-col gap-6 lg:overflow-y-auto pr-2 custom-scrollbar">
+            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-32px)] flex flex-col gap-6 lg:overflow-y-auto pr-4 custom-scrollbar">
               
               {/* 1. Degree Standing Card */}
               <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
@@ -3813,7 +3813,7 @@ export default function Home() {
               </aside>
 
           {/* B. RIGHT PANEL: Semester Timeline Card Schedule */}
-          <main className="flex-1 lg:overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-0">
+          <main className="flex-1 lg:overflow-y-auto pr-4 custom-scrollbar space-y-6 pb-0">
             
             {/* Semester timelines header */}
             <div className="grid grid-cols-3 items-center border-b border-slate-800 pb-2">
@@ -3893,7 +3893,7 @@ export default function Home() {
             </div>
 
             {/* List of Semester Cards */}
-            <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-3 px-1 items-stretch snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
+            <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-5 px-3 items-stretch snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
               {simulatedSemesters.map((sem, semIdx) => {
                 const stats = semesterStats.find(s => s.id === sem.id);
                 const hasCSE400 = sem.courses.some(c => c.code === "CSE400");
