@@ -242,60 +242,30 @@ export default function Home() {
     if (tutorialStep === null || !isMounted) return;
 
     const updatePosition = () => {
-      const isWizard = [2, 3, 4].includes(tutorialStep);
       const isMd = window.innerWidth >= 768;
 
-      if (isWizard) {
-        if (isMd) {
-          // Desktop Wizard: Place in bottom-left corner of screen to avoid clashing with centered modal layout
-          setPopoverStyle({
-            position: 'fixed',
-            bottom: '24px',
-            left: '24px',
-            right: 'auto',
-            top: 'auto',
-            zIndex: 9999,
-            width: '384px',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-          });
-        } else {
-          // Mobile Wizard: Place at the very top of screen to keep bottom action buttons completely accessible
-          setPopoverStyle({
-            position: 'fixed',
-            top: '16px',
-            left: '16px',
-            right: '16px',
-            bottom: 'auto',
-            zIndex: 9999,
-            width: 'calc(100vw - 32px)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-          });
-        }
+      if (isMd) {
+        setPopoverStyle({
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          left: 'auto',
+          top: 'auto',
+          zIndex: 9999,
+          width: '384px',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        });
       } else {
-        // All other steps (Landing + Timeline Dashboard): Standard fixed bottom-right layout
-        if (isMd) {
-          setPopoverStyle({
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            left: 'auto',
-            top: 'auto',
-            zIndex: 9999,
-            width: '384px',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-          });
-        } else {
-          setPopoverStyle({
-            position: 'fixed',
-            bottom: '16px',
-            left: '16px',
-            right: '16px',
-            top: 'auto',
-            zIndex: 9999,
-            width: 'calc(100vw - 32px)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-          });
-        }
+        setPopoverStyle({
+          position: 'fixed',
+          bottom: '16px',
+          left: '16px',
+          right: '16px',
+          top: 'auto',
+          zIndex: 9999,
+          width: 'calc(100vw - 32px)',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        });
       }
     };
 
@@ -2612,26 +2582,26 @@ export default function Home() {
         {/* Landing Page Footer */}
         <footer className="w-full py-10 px-6 border-t border-slate-800/40 bg-[#050507]/40 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
           {/* Connect with me social links (Scaled Up) */}
-          <div className="flex flex-col md:flex-row items-center gap-5 text-sm font-semibold text-slate-100">
-            <span className="text-sm lg:text-base font-bold text-slate-400 tracking-wider uppercase">Connect with me:</span>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm font-semibold text-slate-100">
+            <span className="text-sm lg:text-base font-bold text-slate-400 tracking-wider uppercase leading-none">Connect with me:</span>
             <a
               href="https://github.com/fakekhanabdullah"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,248,0.8)] active:scale-95 transition-all duration-300"
+              className="inline-flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,241,0.8)] active:scale-95 transition-all duration-300 leading-none"
             >
-              <svg className="h-5.5 w-5.5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-              <span>GitHub</span>
+              <svg className="h-5.5 w-5.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+              <span className="leading-none">GitHub</span>
             </a>
-            <span className="text-slate-600 select-none px-1">|</span>
+            <span className="text-slate-600 select-none px-1 self-center">|</span>
             <a
               href="https://www.linkedin.com/in/khan-abdullahh"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,248,0.8)] active:scale-95 transition-all duration-300"
+              className="inline-flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,241,0.8)] active:scale-95 transition-all duration-300 leading-none"
             >
-              <svg className="h-5.5 w-5.5 fill-current" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-              <span>LinkedIn</span>
+              <svg className="h-5.5 w-5.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+              <span className="leading-none">LinkedIn</span>
             </a>
           </div>
 
@@ -2997,7 +2967,6 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                     </svg>
                   </div>
-                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">SETUP WIZARD</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step</span>
@@ -3012,7 +2981,7 @@ export default function Home() {
                     key={s}
                     className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
                       s <= wizardStep 
-                        ? 'bg-gradient-to-r from-indigo-500 to-purple-600' 
+                        ? 'bg-indigo-500' 
                         : 'bg-slate-800/80'
                     }`}
                   />
@@ -4546,26 +4515,26 @@ export default function Home() {
       {/* Proper Stationary Footer Section */}
       <footer className="mt-auto pt-8 pb-6 border-t border-slate-800 bg-zinc-950/20 flex flex-col items-center justify-center gap-4 text-center">
         {/* Connect with me social links */}
-        <div className="flex items-center gap-4 text-xs font-semibold text-slate-400">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Connect with me:</span>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-400">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold leading-none">Connect with me:</span>
           <a
             href="https://github.com/fakekhanabdullah"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 hover:text-indigo-400 transition"
+            className="inline-flex items-center gap-1.5 hover:text-indigo-400 transition leading-none"
           >
-            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-            <span>GitHub</span>
+            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400 shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            <span className="leading-none">GitHub</span>
           </a>
-          <span className="text-zinc-800">|</span>
+          <span className="text-zinc-800 self-center">|</span>
           <a
             href="https://www.linkedin.com/in/khan-abdullahh"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 hover:text-indigo-400 transition"
+            className="inline-flex items-center gap-1.5 hover:text-indigo-400 transition leading-none"
           >
-            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-            <span>LinkedIn</span>
+            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400 shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+            <span className="leading-none">LinkedIn</span>
           </a>
         </div>
 
@@ -4578,12 +4547,14 @@ export default function Home() {
       {/* 5. Grade Sheet Preview Modal */}
       {showGradeSheetModal && isMounted && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-transparent print:backdrop-none no-print-backdrop">
-          <div className="bg-[#09090b] border border-slate-800 rounded-xl max-w-4xl w-full p-6 text-slate-100 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
+          <div className="bg-[#09090b]/95 border border-slate-800/80 rounded-xl max-w-4xl w-full p-6 text-slate-100 shadow-[0_0_50px_rgba(99,102,241,0.15)] relative flex flex-col max-h-[92vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
             
             {/* Modal Action Header Bar (3 Controls) */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800/60 no-print">
-              <div className="flex items-center gap-2">
-                <Camera className="h-5 w-5 text-indigo-400" />
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
+                  <Camera className="h-5 w-5" />
+                </div>
                 <h3 className="text-sm sm:text-base font-bold text-slate-100">Academic Progress Snapshot Preview</h3>
               </div>
               <div className="flex items-center gap-3">
@@ -4609,14 +4580,15 @@ export default function Home() {
             </div>
 
             {/* Scrollable Printable Grade Sheet Container */}
-            <div className="overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 flex items-start justify-center flex-grow">
+            <div className={`overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 flex items-start flex-grow ${snapshotScale < 1 ? 'justify-start pl-4' : 'justify-center'}`}>
               {/* Dynamic responsive scaling wrapper to fit 750px perfectly in any viewport width */}
               <div 
-                className="w-[750px] shrink-0 transition-all duration-300"
+                className="shrink-0 transition-all duration-300"
                 style={{
+                  width: `${750 * snapshotScale}px`,
                   height: `${snapshotHeight * snapshotScale}px`,
                   transform: `scale(${snapshotScale})`,
-                  transformOrigin: 'top center'
+                  transformOrigin: snapshotScale < 1 ? 'top left' : 'top center'
                 }}
               >
                 {/* Visible Grade Sheet Node Target */}
@@ -4629,22 +4601,29 @@ export default function Home() {
                   className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-xl p-6 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto"
                 >
                 {/* Watermark Background (Z-Index 0) */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden">
-                  <span className="text-[120px] font-black tracking-tighter text-slate-100/[0.03] transform -rotate-12 whitespace-nowrap">
-                    FLOW 136
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden gap-6">
+                  <div className="h-28 w-28 rounded-[28px] border-4 border-indigo-400/2 bg-indigo-500/[0.005] flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.01)] shrink-0">
+                    <svg className="h-16 w-16 text-slate-100/[0.018] fill-none stroke-current stroke-[2.5]" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                    </svg>
+                  </div>
+                  <span className="text-[100px] font-black tracking-tight text-slate-100/[0.018] whitespace-nowrap">
+                    Flow136
                   </span>
                 </div>
 
                 {/* Section 1: Header (Z-Index 10) */}
                 <div className="flex items-center justify-between pb-6 border-b border-slate-800/60 relative z-10">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.25)]">
-                      <GraduationCap className="h-5 w-5 text-indigo-400" />
+                    <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)]">
+                      <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                      </svg>
                     </div>
                     <div>
-                      <h1 className="text-2xl font-extrabold tracking-tight text-slate-100">Flow136</h1>
+                      <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Flow136</h1>
                       <span className="text-[10px] font-semibold tracking-widest text-indigo-400 uppercase block">
-                        OFFICIAL CURRICULUM PROGRESS & GRADE SHEET
+                        CURRICULUM PROGRESS & GRADE SHEET
                       </span>
                     </div>
                   </div>
@@ -4800,7 +4779,14 @@ export default function Home() {
                 {/* Section 4: Footer Watermark (Z-Index 10) */}
                 <div className="border-t border-slate-800/60 mt-4 pt-3 relative z-10 text-center">
                   <p className="text-xs text-slate-400 font-medium leading-relaxed">
-                    Flow136 &bull; Your curriculum, minus the complexity.
+                    <a 
+                      href="https://flow136-cse-course-tracker.vercel.app/" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-indigo-400 hover:text-indigo-300 underline font-semibold transition cursor-pointer"
+                    >
+                      Flow136
+                    </a> &bull; Your curriculum, minus the complexity.
                   </p>
                 </div>
               </div> {/* End flow136-grade-sheet-export-node */}
@@ -4824,25 +4810,25 @@ export default function Home() {
       {/* Recommended Curriculum Roadmap Modal Overlay */}
       {showRoadmapModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#09090b] border border-slate-800 rounded-xl max-w-[95vw] md:max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl text-xs md:text-sm">
+          <div className="bg-[#09090b]/95 border border-slate-800 rounded-xl max-w-[95vw] md:max-w-6xl w-full max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(99,102,241,0.15)] relative overflow-hidden backdrop-blur-xl text-xs md:text-sm">
             {/* Ambient glows inside modal */}
             <div className="absolute top-[-10%] left-[-10%] w-[30%] h-[30%] rounded-full bg-indigo-500/10 blur-[80px] pointer-events-none" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] rounded-full bg-purple-500/10 blur-[80px] pointer-events-none" />
             
             {/* Header */}
-            <div className="px-4 md:px-6 py-4 border-b border-slate-800/85 flex items-center justify-between relative z-10 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+            <div className="px-4 md:px-6 py-4 border-b border-slate-800/85 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10 shrink-0 text-center sm:text-left">
+              <div className="flex flex-col sm:flex-row items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
                   <HelpCircle className="h-5 w-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-100">Recommended Courses for CSE Curriculum</h3>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">FYAT Recommended Course Roadmap Chart</p>
+                <div className="min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-100 leading-tight">Recommended Courses for CSE Curriculum</h3>
+                  <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wide mt-1">FYAT Recommended Course Roadmap Chart</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowRoadmapModal(false)}
-                className="h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800/40 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
+                className="absolute top-4 right-4 sm:relative sm:top-auto sm:right-auto h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800/40 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer shrink-0"
               >
                 <X className="h-4.5 w-4.5" />
               </button>
@@ -4850,15 +4836,15 @@ export default function Home() {
 
             {/* Scrollable Modal Content */}
             <div className="flex-grow overflow-auto p-4 md:p-6 relative z-10 custom-scrollbar">
-              <div className="min-w-[950px] space-y-6">
+              <div className="min-w-0 md:min-w-[950px] space-y-6">
                 
                 {/* Stats Summary Header - CSE Curriculum */}
-                <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-xl p-4 flex flex-col gap-2">
-                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">CSE Curriculum (136 Credits)</span>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-semibold">132 Academic + 4 Non-Academic Credits</span>
+                <div className="bg-zinc-900/60 border border-slate-800/60 rounded-xl p-4 flex flex-col gap-2">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-slate-800/80 pb-2 text-center sm:text-left">
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">CSE Curriculum (136 Credits)</span>
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full font-semibold">132 Academic + 4 Non-Academic Credits</span>
                   </div>
-                  <div className="grid grid-cols-7 gap-2 text-center">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 text-center">
                     <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
                       <p className="text-[10px] text-slate-400 uppercase">BIL</p>
                       <p className="text-xs font-bold text-slate-100 mt-1">2 Courses</p>
@@ -4879,9 +4865,9 @@ export default function Home() {
                       <p className="text-[10px] text-slate-400 uppercase">Dept Core</p>
                       <p className="text-xs font-bold text-slate-100 mt-1">25 + 2 Elec</p>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-emerald-500/20">
-                      <p className="text-[10px] text-emerald-500/80 uppercase leading-tight">Thesis / Internship / Final Project</p>
-                      <p className="text-xs font-bold text-emerald-300 mt-1">1 Course</p>
+                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
+                      <p className="text-[10px] text-slate-400 uppercase leading-tight">Thesis / Internship / Final Project</p>
+                      <p className="text-xs font-bold text-slate-100 mt-1">1 Course</p>
                     </div>
                     <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
                       <p className="text-[10px] text-slate-400 uppercase">Total Courses</p>
@@ -4891,15 +4877,15 @@ export default function Home() {
                 </div>
 
                 {/* Main Split Table Layout */}
-                <div className="flex gap-0 items-stretch rounded-xl overflow-hidden border border-zinc-700/50 bg-zinc-900/60 shadow-lg">
+                <div className="flex flex-col md:flex-row gap-0 items-stretch rounded-xl overflow-hidden border border-zinc-700/50 bg-zinc-900/60 shadow-lg">
 
                   {/* ═══════════════════════════════════════════════
                       LEFT SECTION: COURSE OUTSIDE DEPARTMENT
                   ═══════════════════════════════════════════════ */}
-                  <div className="w-[42%] shrink-0 flex flex-col">
+                  <div className="w-full md:w-[42%] shrink-0 flex flex-col border-b md:border-b-0 border-zinc-700/50">
 
                     {/* Section Header Band */}
-                    <div className="px-4 py-2.5 bg-indigo-950/60 border-b-2 border-indigo-600/40 border-r border-zinc-700/50">
+                    <div className="px-4 py-2.5 bg-indigo-950/60 border-b-2 border-indigo-600/40 md:border-r border-zinc-700/50">
                       <div className="flex items-center justify-center gap-2">
                         <div className="h-px flex-1 bg-indigo-600/30" />
                         <h4 className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-[0.15em] whitespace-nowrap">
@@ -4909,7 +4895,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="p-3 space-y-2.5 border-r border-zinc-700/50 flex-1">
+                    <div className="p-3 space-y-2.5 md:border-r border-zinc-700/50 flex-1">
 
                       {/* BIL Section */}
                       <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
@@ -5069,7 +5055,7 @@ export default function Home() {
                   </div>
 
                   {/* ═══ Vertical Section Divider ═══ */}
-                  <div className="w-[3px] self-stretch bg-gradient-to-b from-indigo-600/0 via-zinc-600/60 to-indigo-600/0 shrink-0" />
+                  <div className="hidden md:block w-[3px] self-stretch bg-gradient-to-b from-indigo-600/0 via-zinc-600/60 to-indigo-600/0 shrink-0" />
 
                   {/* ═══════════════════════════════════════════════
                       RIGHT SECTION: DEPARTMENT CORE
@@ -5139,7 +5125,7 @@ export default function Home() {
                                 "CSE110","CSE111","CSE220","CSE221","CSE230","CSE250","CSE251","CSE260",
                                 "CSE320","CSE321","CSE330","CSE331","CSE340","CSE341","CSE350","CSE360",
                                 "CSE370","CSE420","CSE421","CSE422","CSE423","CSE460","CSE461","CSE470",
-                                "CSE471","CSE400"
+                                "CSE471"
                               ];
                               const electives = [
                                 "CSE101","CSE310","CSE342","CSE371","CSE390","CSE391","CSE392","CSE410",
@@ -5148,12 +5134,25 @@ export default function Home() {
                               ];
                               const isCore1 = programCore.includes(row.c1);
                               const isElect2 = electives.includes(row.c2);
+                              const isThesis1 = row.c1 === "CSE400";
                               return (
                                 <tr key={index} className="border-b border-slate-800/60 last:border-0">
-                                  <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${isCore1 ? 'bg-emerald-950/40 text-emerald-300' : 'text-slate-100'}`}>
+                                  <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${
+                                    isThesis1 
+                                      ? 'bg-purple-950/40 text-purple-300' 
+                                      : isCore1 
+                                        ? 'bg-emerald-950/40 text-emerald-300' 
+                                        : 'text-slate-100'
+                                  }`}>
                                     {row.c1 || ""}
                                   </td>
-                                  <td className={`p-1.5 border-r-2 border-zinc-700/60 text-[11px] ${isCore1 ? 'bg-emerald-950/20 text-emerald-100/90' : 'text-slate-400'}`}>
+                                  <td className={`p-1.5 border-r-2 border-zinc-700/60 text-[11px] ${
+                                    isThesis1 
+                                      ? 'bg-purple-950/20 text-purple-100/90' 
+                                      : isCore1 
+                                        ? 'bg-emerald-950/20 text-emerald-100/90' 
+                                        : 'text-slate-400'
+                                  }`}>
                                     {row.n1}
                                   </td>
                                   <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${isElect2 ? 'bg-amber-950/40 text-amber-300' : 'text-slate-400'}`}>
@@ -5174,9 +5173,9 @@ export default function Home() {
                 </div>
 
                 {/* GenEd Help Link Section */}
-                <div className="bg-zinc-900/40 border border-slate-800 rounded-xl p-4 flex items-center justify-between mt-4">
+                <div className="bg-zinc-900/40 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 text-center sm:text-left">
                   <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse" />
+                    <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
                     <p className="text-xs text-slate-100 font-medium">
                       Need more help understanding the GenEd streams?
                     </p>
@@ -5185,7 +5184,7 @@ export default function Home() {
                     href="https://www.bracu.ac.bd/avilable-program/general-education-gened"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-98 cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-98 cursor-pointer w-full sm:w-auto"
                   >
                     <span>View the Official BRACU GenEd Guidelines</span>
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -5196,11 +5195,11 @@ export default function Home() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-800/80 bg-zinc-950/60 flex items-center justify-between text-[10px] text-slate-400 shrink-0 relative z-10">
+            <div className="px-6 py-4 border-t border-slate-800/80 bg-zinc-950/60 flex flex-col md:flex-row items-center justify-between gap-3 text-[10px] text-slate-400 shrink-0 relative z-10 text-center md:text-left">
               <span className="font-bold uppercase tracking-wider text-indigo-400/80">
                 Guideline for CSE Curriculum
               </span>
-              <span className="flex items-center gap-3">
+              <span className="flex flex-wrap items-center justify-center gap-3">
                 <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   Green = Program Core
@@ -5209,8 +5208,12 @@ export default function Home() {
                   <span className="h-2 w-2 rounded-full bg-amber-500" />
                   Amber = CSE Electives
                 </span>
+                <span className="font-semibold text-purple-400 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-purple-500" />
+                  Purple = CSE400
+                </span>
               </span>
-              <span className="text-slate-400 text-right max-w-xs">
+              <span className="text-slate-400 text-center md:text-right max-w-xs">
                 Created By <strong className="text-slate-100">Badhon Nandi</strong>, MENTOR (FYAT)<br />
                 Office of Academic Advising(OAA), Brac University
               </span>
