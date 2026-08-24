@@ -3450,6 +3450,11 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Dynamic spacer on mobile when tutorial is active, so the user can scroll past the floating tutorial popover */}
+            {tutorialStep !== null && (
+              <div className="h-60 md:hidden" />
+            )}
           </div>
         </div>
       ) : (
