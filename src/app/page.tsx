@@ -25,11 +25,20 @@ import {
   Lock,
   Target,
   TrendingUp,
+  TrendingDown,
   FileText,
   Camera,
   List,
   Columns,
-  ArrowRight
+  ArrowRight,
+  ArrowUpRight,
+  Sparkles,
+  CheckCircle2,
+  Crosshair,
+  Repeat,
+  Layers,
+  BadgeCheck,
+  Gauge
 } from "lucide-react";
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
 
@@ -134,8 +143,25 @@ const GRADING_SCALE: Record<string, number> = {
   "C-": 1.7,
   "D+": 1.3,
   "D": 1.0,
+  "D-": 0.7,
   "F": 0.0
 };
+
+const GRADING_SYSTEM_INFO = [
+  { marks: "97 - 100*", grade: "A+", points: "4.0", remark: "Exceptional" },
+  { marks: "90 - <97*", grade: "A", points: "4.0", remark: "Excellent" },
+  { marks: "85 - <90", grade: "A-", points: "3.7", remark: "" },
+  { marks: "80 - <85", grade: "B+", points: "3.3", remark: "" },
+  { marks: "75 - <80", grade: "B", points: "3.0", remark: "Good" },
+  { marks: "70 - <75", grade: "B-", points: "2.7", remark: "" },
+  { marks: "65 - <70", grade: "C+", points: "2.3", remark: "" },
+  { marks: "60 - <65", grade: "C", points: "2.0", remark: "Fair" },
+  { marks: "57 - <60", grade: "C-", points: "1.7", remark: "" },
+  { marks: "55 - <57", grade: "D+", points: "1.3", remark: "" },
+  { marks: "52 - <55", grade: "D", points: "1.0", remark: "Poor" },
+  { marks: "50 - <52", grade: "D-", points: "0.7", remark: "" },
+  { marks: "<50", grade: "F", points: "0.0", remark: "Failure" },
+];
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
@@ -224,7 +250,11 @@ export default function Home() {
   const [showDataDropdown, setShowDataDropdown] = useState<boolean>(false);
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
   const [targetCgpa, setTargetCgpa] = useState<string>("3.50");
-  const [roiExpanded, setRoiExpanded] = useState<boolean>(false);
+  const [showRoiModal, setShowRoiModal] = useState<boolean>(false);
+  const [roiThresholdGrade, setRoiThresholdGrade] = useState<string>("B-");
+  const [selectedRoiCourses, setSelectedRoiCourses] = useState<Record<string, boolean>>({});
+  const [roiTargetGrades, setRoiTargetGrades] = useState<Record<string, string>>({});
+  const [showGradingSystemModal, setShowGradingSystemModal] = useState<boolean>(false);
   const [isCapstoneCollapsed, setIsCapstoneCollapsed] = useState<boolean>(false);
   const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState<boolean>(false);
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
@@ -328,9 +358,10 @@ export default function Home() {
     } else if (step === 9) {
       setShowDashboard(true);
       setMode('gpa');
-      setRoiExpanded(true);
+      setShowRoiModal(true);
     } else if (step === 10) {
       setShowDashboard(true);
+      setShowRoiModal(false);
     } else if (step === 11) {
       setShowDashboard(true);
     } else if (step === 12) {
@@ -375,7 +406,7 @@ export default function Home() {
   const [draggingSourceSemesterId, setDraggingSourceSemesterId] = useState<string | null>(null);
   const [dragOverSemesterId, setDragOverSemesterId] = useState<string | null>(null);
 
-  // Monitor screen width to automatically disable Kanban view on mobile
+  // Monitor screen width for responsive features
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -1077,9 +1108,19 @@ export default function Home() {
     });
   }, [semesters, onboardingData.startingTerm, onboardingData.startingYear]);
 
-  // Repeat ROI Recommendations for Mode B
-  const roiRecommendations = useMemo(() => {
-    if (mode !== 'gpa') return [];
+  // Repeat ROI Recommendations & Multi-Course Simulation for Mode B
+  const roiAnalysis = useMemo(() => {
+    if (mode !== 'gpa') return {
+      currentCgpa: 0,
+      totalCgpaCredits: 0,
+      candidates: [],
+      combinedSelectedCount: 0,
+      combinedSelectedCredits: 0,
+      combinedNewCgpa: 0,
+      combinedDelta: 0,
+      hasDecreases: false,
+      hasIncreases: false,
+    };
 
     let totalCgpaCredits = 0;
     let totalCgpaPoints = 0;
@@ -1099,7 +1140,23 @@ export default function Home() {
 
     const currentCgpa = totalCgpaCredits > 0 ? (totalCgpaPoints / totalCgpaCredits) : 0.00;
 
-    const items: { code: string; currentGrade: string; delta: number; newCgpa: number }[] = [];
+    const thresholdGp = roiThresholdGrade === 'all'
+      ? 4.0
+      : (GRADING_SCALE[roiThresholdGrade] ?? 2.7);
+
+    const candidates: {
+      code: string;
+      title: string;
+      credits: number;
+      currentGrade: string;
+      currentGp: number;
+      targetGrade: string;
+      targetGp: number;
+      isSelected: boolean;
+      delta: number;
+      newCgpa: number;
+      isF: boolean;
+    }[] = [];
 
     Object.keys(newestCourseAttempts).forEach(code => {
       const { course } = newestCourseAttempts[code];
@@ -1108,24 +1165,82 @@ export default function Home() {
 
       if (courseData?.category === "Non-Credit" || (courseData?.credits ?? 0) === 0) return;
 
-      if (course.isCompleted && course.grade) {
-        const gp = GRADING_SCALE[course.grade];
-        if (gp >= 1.7 && gp <= 2.7) {
-          const newPoints = totalCgpaPoints - (gp * credits) + (4.0 * credits);
-          const newCgpa = newPoints / totalCgpaCredits;
-          const delta = newCgpa - currentCgpa;
-          items.push({
+      if (course.isCompleted && course.grade && GRADING_SCALE[course.grade] !== undefined) {
+        const currentGp = GRADING_SCALE[course.grade];
+        const isF = course.grade === 'F';
+
+        // Courses with F are always automatically included; other courses check against threshold
+        const isEligible = isF || (roiThresholdGrade === 'all' ? currentGp < 4.0 : currentGp <= thresholdGp);
+
+        if (isEligible) {
+          const targetGrade = roiTargetGrades[code] || "A";
+          const targetGp = GRADING_SCALE[targetGrade] ?? 4.0;
+          const isSelected = selectedRoiCourses[code] ?? true;
+
+          // Single course delta
+          const singleNewPoints = totalCgpaPoints - (currentGp * credits) + (targetGp * credits);
+          const singleNewCgpa = totalCgpaCredits > 0 ? (singleNewPoints / totalCgpaCredits) : 0;
+          const delta = singleNewCgpa - currentCgpa;
+
+          candidates.push({
             code,
+            title: courseData?.title || code,
+            credits,
             currentGrade: course.grade,
+            currentGp,
+            targetGrade,
+            targetGp,
+            isSelected,
             delta,
-            newCgpa
+            newCgpa: singleNewCgpa,
+            isF
           });
         }
       }
     });
 
-    return items.sort((a, b) => b.delta - a.delta);
-  }, [newestCourseAttempts, mode]);
+    // Sort candidates by potential boost with target grade
+    candidates.sort((a, b) => b.delta - a.delta);
+
+    // Calculate combined effect for selected courses
+    let combinedPointDelta = 0;
+    let combinedSelectedCount = 0;
+    let combinedSelectedCredits = 0;
+    let hasDecreases = false;
+    let hasIncreases = false;
+
+    candidates.forEach(c => {
+      if (c.isSelected) {
+        combinedSelectedCount++;
+        combinedSelectedCredits += c.credits;
+        const ptDelta = (c.targetGp - c.currentGp) * c.credits;
+        combinedPointDelta += ptDelta;
+        if (c.targetGp < c.currentGp) {
+          hasDecreases = true;
+        } else if (c.targetGp > c.currentGp) {
+          hasIncreases = true;
+        }
+      }
+    });
+
+    const combinedNewPoints = totalCgpaPoints + combinedPointDelta;
+    const combinedNewCgpa = totalCgpaCredits > 0 ? (combinedNewPoints / totalCgpaCredits) : 0;
+    const combinedDelta = combinedNewCgpa - currentCgpa;
+
+    return {
+      currentCgpa,
+      totalCgpaCredits,
+      candidates,
+      combinedSelectedCount,
+      combinedSelectedCredits,
+      combinedNewCgpa,
+      combinedDelta,
+      hasDecreases,
+      hasIncreases
+    };
+  }, [newestCourseAttempts, mode, roiThresholdGrade, roiTargetGrades, selectedRoiCourses]);
+
+  const roiRecommendations = roiAnalysis.candidates;
 
 
 
@@ -1249,7 +1364,8 @@ export default function Home() {
     else if (requiredGpa > 1.7) letterEquivalent = "C";
     else if (requiredGpa > 1.3) letterEquivalent = "C-";
     else if (requiredGpa > 1.0) letterEquivalent = "D+";
-    else if (requiredGpa > 0.0) letterEquivalent = "D";
+    else if (requiredGpa > 0.7) letterEquivalent = "D";
+    else if (requiredGpa > 0.0) letterEquivalent = "D-";
     else letterEquivalent = "F";
 
     return {
@@ -2453,7 +2569,7 @@ export default function Home() {
     );
   }
 
-  const currentLayout = isMobile ? 'list' : viewMode;
+  const currentLayout = viewMode;
 
   if (!showDashboard) {
     return (
@@ -3428,8 +3544,8 @@ export default function Home() {
         </div>
       ) : (
         /* Actual App Dashboard */
-        <div className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 flex flex-col">
-          <div className="flex-1 flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col lg:flex-row gap-6 min-w-0 w-full">
             
             {/* A. LEFT SIDEBAR: Degree Progress & Statistics */}
             <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-32px)] flex flex-col gap-6 lg:overflow-y-auto pr-4 custom-scrollbar">
@@ -3439,7 +3555,7 @@ export default function Home() {
                 <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-500/[0.02] rounded-full blur-2xl pointer-events-none" />
                 
                 <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2 mb-4">
-                  <GraduationCap className="h-4 w-4" />
+                  <BadgeCheck className="h-4 w-4" />
                   Degree Standing
                 </h2>
                 
@@ -3464,7 +3580,7 @@ export default function Home() {
                 {mode === 'gpa' && (
                   <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
                     <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4" />
+                      <Gauge className="h-4 w-4" />
                       GPA Dashboard
                     </h2>
 
@@ -3491,19 +3607,26 @@ export default function Home() {
 
                     {/* Target CGPA Solver Widget */}
                     <div 
-                      className={`bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl space-y-3.5 shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('gpa-solver-card')}`}
+                      className={`bg-zinc-900/40 border border-slate-800/70 hover:border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4 transition-all ${getHighlightClass('gpa-solver-card')}`}
                       data-tutorial="gpa-solver-card"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
-                            <Target className="h-3.5 w-3.5" />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
+                            <Crosshair className="h-5 w-5" />
                           </div>
-                          <p className="text-xs font-semibold tracking-wider text-slate-100 uppercase">Target Solver</p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold tracking-wider text-slate-100 uppercase truncate">
+                              TARGET SOLVER
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              CGPA Goal Calculator
+                            </p>
+                          </div>
                         </div>
-                        
-                        <div className="inline-flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2 shadow-inner">
-                          <span className="text-xs text-slate-400">Target:</span>
+
+                        <div className="flex items-center gap-1.5 bg-zinc-950/80 border border-slate-800 focus-within:border-indigo-500/50 rounded-xl px-3 py-1.5 shadow-inner transition-colors shrink-0">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Goal:</span>
                           <input
                             type="number"
                             step="0.01"
@@ -3511,82 +3634,107 @@ export default function Home() {
                             max="4.0"
                             value={targetCgpa}
                             onChange={(e) => setTargetCgpa(e.target.value)}
-                            className="w-12 text-sm font-semibold text-slate-100 bg-transparent focus:outline-none focus:text-indigo-300 text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            className="w-12 text-sm font-bold font-mono text-indigo-300 bg-transparent focus:outline-none text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none selection:bg-indigo-500/30"
                           />
                         </div>
                       </div>
 
                       {targetSolverResult.isAchieved ? (
-                        <div className="text-xs leading-relaxed text-slate-350">
-                          🎉 Graduation requirements met! Your final CGPA is <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
+                        <div className="flex items-center gap-3 bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-3.5 text-emerald-300">
+                          <div className="h-9 w-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                          </div>
+                          <div className="min-w-0 text-xs">
+                            <p className="font-bold text-emerald-200 uppercase tracking-wider text-[11px]">Goal Achieved!</p>
+                            <p className="text-emerald-300/80 text-[11px] mt-0.5">
+                              Graduation requirements fulfilled. Final CGPA: <span className="font-bold font-mono text-emerald-200">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>
+                            </p>
+                          </div>
                         </div>
                       ) : targetSolverResult.requiredGpa > 4.00 ? (
-                        <div className="bg-rose-950/15 border border-rose-900/30 p-3 rounded-lg text-rose-400 space-y-1 text-xs leading-relaxed">
-                          <p className="font-bold flex items-center gap-1 text-[11px] uppercase tracking-wider">⚠️ Out of Reach</p>
-                          <p>This target is mathematically out of reach. If you score a flat 4.00 (all A's) across your remaining credits, your maximum possible graduation CGPA will be <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.</p>
+                        <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3.5 space-y-2 text-rose-300">
+                          <div className="flex items-center gap-2 text-rose-400 font-bold text-xs tracking-wider uppercase">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span>Target Out of Reach</span>
+                          </div>
+                          <p className="text-[11px] text-rose-300/80 leading-relaxed">
+                            Even scoring a flat <strong className="text-rose-200 font-bold">4.00 (all A's)</strong> across your remaining credits yields a maximum possible graduation CGPA of <span className="font-mono font-bold text-rose-200 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
+                          </p>
                         </div>
                       ) : (
-                        <div className="text-xs leading-relaxed text-slate-100">
-                          To reach <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetCgpa}</span>, you need to maintain an average semester grade of <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.requiredGpa.toFixed(2)}</span> (approx. <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.letterEquivalent}</span>) over your remaining <span className="font-semibold text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded border border-slate-800/60">{targetSolverResult.remainingCredits} credits</span>.
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2.5">
+                            {/* Required GPA Stat Card */}
+                            <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                              <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+                                Required GPA / Sem
+                              </span>
+                              <div className="flex items-baseline gap-2 mt-1.5">
+                                <span className="text-xl font-bold font-mono text-white tracking-tight">
+                                  {Math.max(0, targetSolverResult.requiredGpa).toFixed(2)}
+                                </span>
+                                <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-1.5 py-0.5 rounded">
+                                  {targetSolverResult.letterEquivalent}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Remaining Credits Stat Card */}
+                            <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                              <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+                                Remaining Credits
+                              </span>
+                              <div className="flex items-baseline gap-1 mt-1.5">
+                                <span className="text-xl font-bold font-mono text-slate-100 tracking-tight">
+                                  {targetSolverResult.remainingCredits}
+                                </span>
+                                <span className="text-[11px] font-medium text-slate-400">
+                                  cr
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Summary Row */}
+                          <div className="flex items-center gap-2.5 bg-slate-950/40 border border-slate-800/60 rounded-xl px-3 py-2 text-[11px] text-slate-300 leading-relaxed">
+                            <ArrowUpRight className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                            <span>
+                              Maintain an average of <strong className="text-indigo-300 font-semibold">{Math.max(0, targetSolverResult.requiredGpa).toFixed(2)} ({targetSolverResult.letterEquivalent})</strong> over remaining credits to reach your <strong className="text-white font-semibold">{targetCgpa}</strong> goal.
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Repeat ROI Analyzer Widget */}
+                    {/* Repeat ROI Analyzer Sidebar Widget */}
                     <div 
-                      className={`bg-zinc-900/15 border border-slate-800/40 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.03)] ${getHighlightClass('roi-analyzer')}`}
+                      className={`bg-zinc-900/40 border border-slate-800/70 hover:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-lg transition-all ${getHighlightClass('roi-analyzer')}`}
                       data-tutorial="roi-analyzer"
                     >
-                      <div className="p-5 flex items-center justify-between border-b border-slate-800/40 bg-zinc-950/20">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-slate-800 flex items-center justify-center text-indigo-400">
-                            <TrendingUp className="h-3.5 w-3.5" />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
+                            <Repeat className="h-5 w-5" />
                           </div>
-                          <p className="text-xs font-semibold tracking-wider text-slate-100 uppercase">Repeat ROI Analyzer</p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold tracking-wider text-slate-100 uppercase truncate">
+                              REPEAT ROI ANALYZER
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              Simulate grade improvement impact
+                            </p>
+                          </div>
                         </div>
-                        
+
                         <button
                           type="button"
-                          onClick={() => setRoiExpanded(!roiExpanded)}
-                          className="text-slate-400 font-bold text-[10px] bg-zinc-900 px-2 py-1 rounded border border-slate-800 flex items-center gap-1.5 hover:text-indigo-400 transition"
+                          onClick={() => setShowRoiModal(true)}
+                          className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-slate-700/80 hover:border-indigo-500/50 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] shrink-0 cursor-pointer"
                         >
-                          <span>{roiRecommendations.length} courses</span>
-                          {roiExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          <span>{roiAnalysis.candidates.length} courses</span>
+                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                         </button>
                       </div>
-
-                      {roiExpanded && (
-                        <div className="p-5 border-t border-slate-800 bg-zinc-950/10 space-y-3">
-                          {roiRecommendations.length === 0 ? (
-                            <div className="text-xs text-slate-400 py-2 leading-relaxed">
-                              No C- to B- range courses found to repeat.
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              <div className="bg-indigo-950/20 border border-indigo-900/30 p-3 rounded-lg text-indigo-350 text-xs leading-relaxed">
-                                <span className="font-bold text-slate-100">Biggest Impact:</span> Repeating <span className="font-bold text-slate-100">{roiRecommendations[0].code}</span> (Current: <span className="font-semibold text-slate-400">{roiRecommendations[0].currentGrade}</span>) to an A will boost your overall CGPA by <span className="font-extrabold text-indigo-400">+{roiRecommendations[0].delta.toFixed(3)}</span> points.
-                              </div>
-
-                              <div className="space-y-2">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Top 3 Optimization Targets</p>
-                                {roiRecommendations.slice(0, 3).map((item, idx) => (
-                                  <div key={item.code} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-800 last:border-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[9px] font-bold text-slate-400 w-3">{idx + 1}.</span>
-                                      <span className="font-bold text-slate-100">{item.code}</span>
-                                      <span className="text-[10px] text-slate-400 bg-zinc-900 px-1 rounded border border-slate-800">{item.currentGrade}</span>
-                                    </div>
-                                    <div className="text-right text-[11px]">
-                                      <span className="text-indigo-400 font-bold">+{item.delta.toFixed(3)} CGPA</span>
-                                      <span className="text-[9px] text-zinc-555 block">Yields {item.newCgpa.toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
@@ -3594,7 +3742,7 @@ export default function Home() {
                 {/* 3. Bottom Section: Category Requirements */}
                 <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
                   <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
+                    <Layers className="h-4 w-4" />
                     Category Requirements
                   </h2>
 
@@ -3787,7 +3935,7 @@ export default function Home() {
               </aside>
 
           {/* B. RIGHT PANEL: Semester Timeline Card Schedule */}
-          <main className="flex-1 lg:overflow-y-auto pr-4 custom-scrollbar space-y-6 pb-0">
+          <main className="flex-1 w-full min-w-0 max-w-full lg:overflow-y-auto pr-0 lg:pr-4 custom-scrollbar space-y-6 pb-20">
             
             {/* Semester timelines header */}
             <div className="grid grid-cols-3 items-center border-b border-slate-800 pb-2">
@@ -3803,6 +3951,7 @@ export default function Home() {
                   data-tutorial="layout-toggles"
                 >
                   <button
+                    type="button"
                     onClick={() => handleToggleViewMode("list")}
                     title="List Feed"
                     className={`inline-flex items-center px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
@@ -3814,6 +3963,7 @@ export default function Home() {
                     <List className="h-3.5 w-3.5" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleToggleViewMode("kanban")}
                     title="Kanban Board"
                     className={`inline-flex items-center px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
@@ -3830,6 +3980,7 @@ export default function Home() {
               {/* Right Column: Actions */}
               <div className="flex justify-end items-center gap-2">
                 <button
+                  type="button"
                   onClick={handleToggleAllCollapse}
                   className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-350 hover:text-indigo-400 p-2 rounded-xl transition flex items-center justify-center h-8 w-8 shrink-0 cursor-pointer"
                   title={isAnyExpanded ? "Collapse All" : "Expand All"}
@@ -3857,6 +4008,7 @@ export default function Home() {
                   )}
                 </button>
                 <button
+                  type="button"
                   onClick={handleAddSemester}
                   className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-slate-100 rounded-xl shadow-md transition whitespace-nowrap h-8 w-8 shrink-0 cursor-pointer"
                   title="Add New Semester"
@@ -3867,7 +4019,11 @@ export default function Home() {
             </div>
 
             {/* List of Semester Cards */}
-            <div className={currentLayout === 'kanban' ? "flex flex-row gap-6 overflow-x-auto pt-8 pb-5 px-3 items-stretch snap-x max-w-full custom-scrollbar scale-y-[-1]" : "space-y-6"}>
+            <div className={
+              currentLayout === 'kanban' 
+                ? "flex flex-row gap-4 sm:gap-6 overflow-x-auto pt-8 pb-5 px-1 sm:px-3 items-stretch snap-x max-w-full min-w-0 custom-scrollbar scale-y-[-1]" 
+                : "space-y-6"
+            }>
               {simulatedSemesters.map((sem, semIdx) => {
                 const stats = semesterStats.find(s => s.id === sem.id);
                 const hasCSE400 = sem.courses.some(c => c.code === "CSE400");
@@ -3890,7 +4046,7 @@ export default function Home() {
                     onDragLeave={() => setDragOverSemesterId(null)}
                     className={`${
                       currentLayout === 'kanban' 
-                        ? `w-[340px] min-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] ${sem.isCollapsed ? 'self-start' : ''}` 
+                        ? `w-[84vw] sm:w-[340px] min-w-[280px] max-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] ${sem.isCollapsed ? 'self-start' : ''}` 
                         : ""
                     } border rounded-xl overflow-visible shadow-xl backdrop-blur-md hover:border-slate-700/80 transition-all duration-300 relative ${
                       draggingCourseCode && dragOverSemesterId === sem.id 
@@ -5219,6 +5375,397 @@ export default function Home() {
               </span>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Repeat ROI Analyzer Dedicated Popup Modal */}
+      {showRoiModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-zinc-950 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-zinc-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.2)] shrink-0">
+                  <Repeat className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Repeat ROI Analyzer</h3>
+                  <p className="text-[11px] text-slate-400">Simulate grade improvements, retake scenarios & CGPA impact</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGradingSystemModal(true)}
+                  title="View Official University Grading Scale"
+                  className="text-indigo-300 hover:text-indigo-200 text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-xl border border-indigo-500/30 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Award className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Grading System</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRoiModal(false)}
+                  className="h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar space-y-4">
+              {/* Threshold Filter Bar */}
+              <div className="p-3.5 rounded-xl bg-zinc-900/50 border border-slate-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-300">
+                    Detect courses with grade ≤
+                  </span>
+                  <select
+                    value={roiThresholdGrade}
+                    onChange={(e) => setRoiThresholdGrade(e.target.value)}
+                    className="text-xs font-bold bg-zinc-950 text-indigo-300 border border-indigo-500/40 rounded-lg px-2.5 py-1 focus:outline-none focus:border-indigo-400 cursor-pointer shadow-inner"
+                  >
+                    <option value="B-">B- (2.7) — Standard Policy</option>
+                    <option value="B">B (3.0)</option>
+                    <option value="B+">B+ (3.3)</option>
+                    <option value="A-">A- (3.7)</option>
+                    <option value="C+">C+ (2.3)</option>
+                    <option value="C">C (2.0)</option>
+                    <option value="C-">C- (1.7)</option>
+                    <option value="D+">D+ (1.3)</option>
+                    <option value="D">D (1.0)</option>
+                    <option value="D-">D- (0.7)</option>
+                    <option value="all">All Gradable (&lt; 4.0)</option>
+                  </select>
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-300 text-[10px] font-semibold self-start sm:self-auto">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse shrink-0" />
+                  <span>F grades always included</span>
+                </div>
+              </div>
+
+              {/* Combined Multi-Course Simulation Banner */}
+              {roiAnalysis.combinedSelectedCount > 0 ? (
+                <div className={`p-4 rounded-xl border transition-all duration-300 ${
+                  roiAnalysis.combinedDelta > 0
+                    ? 'bg-gradient-to-r from-emerald-950/30 to-zinc-900/50 border-emerald-500/30 text-emerald-300'
+                    : roiAnalysis.combinedDelta < 0
+                      ? 'bg-gradient-to-r from-rose-950/30 to-zinc-900/50 border-rose-500/30 text-rose-300'
+                      : 'bg-zinc-900/60 border-slate-800 text-slate-300'
+                }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      {roiAnalysis.combinedDelta > 0 ? (
+                        <div className="h-6 w-6 rounded-md bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <TrendingUp className="h-4 w-4" />
+                        </div>
+                      ) : roiAnalysis.combinedDelta < 0 ? (
+                        <div className="h-6 w-6 rounded-md bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                          <TrendingDown className="h-4 w-4" />
+                        </div>
+                      ) : (
+                        <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-slate-400 shrink-0">
+                          <Target className="h-4 w-4" />
+                        </div>
+                      )}
+                      <span>
+                        Combined Simulation ({roiAnalysis.combinedSelectedCount} course{roiAnalysis.combinedSelectedCount > 1 ? 's' : ''}, {roiAnalysis.combinedSelectedCredits} Cr)
+                      </span>
+                    </div>
+                    <span className={`text-xs font-black px-3 py-1 rounded-full border self-start sm:self-auto ${
+                      roiAnalysis.combinedDelta > 0
+                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                        : roiAnalysis.combinedDelta < 0
+                          ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                          : 'bg-zinc-800 border-slate-700 text-slate-300'
+                    }`}>
+                      {roiAnalysis.combinedDelta > 0 ? `+${roiAnalysis.combinedDelta.toFixed(3)}` : roiAnalysis.combinedDelta.toFixed(3)} CGPA
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs pt-2 border-t border-white/5">
+                    <span className="text-slate-300">
+                      Current: <strong className="text-slate-100 font-mono">{roiAnalysis.currentCgpa.toFixed(2)}</strong> → Projected: <strong className={`font-mono ${
+                        roiAnalysis.combinedDelta > 0 ? 'text-emerald-300 font-bold' : roiAnalysis.combinedDelta < 0 ? 'text-rose-300 font-bold' : 'text-slate-100'
+                      }`}>{roiAnalysis.combinedNewCgpa.toFixed(2)}</strong>
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {roiAnalysis.combinedDelta > 0
+                        ? `Boosts CGPA by +${roiAnalysis.combinedDelta.toFixed(3)} points`
+                        : roiAnalysis.combinedDelta < 0
+                          ? `⚠️ Warning: Lowers CGPA by ${Math.abs(roiAnalysis.combinedDelta).toFixed(3)} points`
+                          : 'No net change to overall CGPA'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl border border-dashed border-slate-800 text-center text-xs text-slate-400">
+                  Select one or more courses below using the checkboxes to calculate combined repeat impact.
+                </div>
+              )}
+
+              {/* Toolbar & Course Count */}
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="text-xs font-semibold text-slate-400">
+                  {roiAnalysis.candidates.length} course{roiAnalysis.candidates.length !== 1 ? 's' : ''} detected
+                </span>
+
+                {roiAnalysis.candidates.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allSelected: Record<string, boolean> = {};
+                        roiAnalysis.candidates.forEach(c => { allSelected[c.code] = true; });
+                        setSelectedRoiCourses(allSelected);
+                      }}
+                      className="text-slate-400 hover:text-indigo-300 transition underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allDeselected: Record<string, boolean> = {};
+                        roiAnalysis.candidates.forEach(c => { allDeselected[c.code] = false; });
+                        setSelectedRoiCourses(allDeselected);
+                      }}
+                      className="text-slate-400 hover:text-indigo-300 transition underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setRoiTargetGrades({})}
+                      title="Reset all target repeat grades to 4.0 (A)"
+                      className="text-slate-400 hover:text-indigo-300 transition underline cursor-pointer"
+                    >
+                      Reset Grades
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Course Cards List */}
+              {roiAnalysis.candidates.length === 0 ? (
+                <div className="p-8 rounded-2xl border border-slate-800/80 bg-zinc-900/20 text-center space-y-3">
+                  <div className="h-10 w-10 rounded-xl bg-slate-800/40 flex items-center justify-center text-slate-400 mx-auto">
+                    <Check className="h-5 w-5 text-emerald-400" />
+                  </div>
+                  <p className="text-xs text-slate-300 font-medium">
+                    No courses found with grade ≤ {roiThresholdGrade} (or F).
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    You have no poor performing courses under this threshold. You can raise the threshold to include courses with higher grades.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRoiThresholdGrade('all')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    <span>Show All Gradable Courses (&lt; 4.0)</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
+                  {roiAnalysis.candidates.map((item) => {
+                    const isSelected = item.isSelected;
+                    const isBoost = item.delta > 0;
+                    const isDrop = item.delta < 0;
+
+                    return (
+                      <div 
+                        key={item.code} 
+                        className={`p-3.5 rounded-xl border transition-all ${
+                          isSelected 
+                            ? 'bg-zinc-900/70 border-slate-700/90 shadow-md' 
+                            : 'bg-zinc-950/40 border-slate-800/40 opacity-75 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2.5">
+                          {/* Course info & Checkbox */}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                setSelectedRoiCourses(prev => ({
+                                  ...prev,
+                                  [item.code]: e.target.checked
+                                }));
+                              }}
+                              className="h-4 w-4 rounded border-slate-700 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer shrink-0"
+                              title="Include in combined repeat calculation"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-slate-100">{item.code}</span>
+                                <span className="text-[11px] text-slate-400 font-semibold">({item.credits} Cr)</span>
+                                {item.isF && (
+                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                    F Failed
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-slate-400 truncate block max-w-xs sm:max-w-md" title={item.title}>
+                                {item.title}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Current Grade & Target Grade Dropdown */}
+                          <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+                            <div className="text-right">
+                              <span className="text-[9px] text-slate-400 block uppercase tracking-wider font-bold">Current</span>
+                              <span className={`text-xs font-black px-2 py-0.5 rounded border inline-block ${
+                                item.isF 
+                                  ? 'bg-rose-950/40 border-rose-800/60 text-rose-300' 
+                                  : 'bg-zinc-900 border-slate-700 text-slate-200'
+                              }`}>
+                                {item.currentGrade} ({item.currentGp.toFixed(1)})
+                              </span>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-[9px] text-slate-400 block uppercase tracking-wider font-bold">Repeat As</span>
+                              <select
+                                value={item.targetGrade}
+                                onChange={(e) => {
+                                  const newG = e.target.value;
+                                  setRoiTargetGrades(prev => ({
+                                    ...prev,
+                                    [item.code]: newG
+                                  }));
+                                }}
+                                className="text-xs font-bold bg-zinc-900 text-slate-100 border border-slate-700 hover:border-indigo-500 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner"
+                              >
+                                {Object.keys(GRADING_SCALE).map(g => (
+                                  <option key={g} value={g}>
+                                    {g} ({GRADING_SCALE[g].toFixed(1)})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Individual Course Impact Sub-bar */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            {isBoost ? (
+                              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                <TrendingUp className="h-3.5 w-3.5" />
+                                +{item.delta.toFixed(3)} CGPA Boost
+                              </span>
+                            ) : isDrop ? (
+                              <span className="text-rose-400 font-bold flex items-center gap-1">
+                                <TrendingDown className="h-3.5 w-3.5" />
+                                {item.delta.toFixed(3)} CGPA Drop
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-semibold">
+                                ±0.000 CGPA (No Change)
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="text-slate-400 text-[11px]">
+                            Yields <strong className={isBoost ? 'text-emerald-300' : isDrop ? 'text-rose-300' : 'text-slate-200'}>{item.newCgpa.toFixed(2)} CGPA</strong>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800/80 bg-zinc-900/30 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowRoiModal(false)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-bold rounded-xl transition cursor-pointer shadow-md hover:shadow-indigo-600/20"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Grading System Reference Modal */}
+      {showGradingSystemModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-zinc-900/40">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Award className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Grading System</h3>
+                  <p className="text-[11px] text-slate-400">University standard grade points & marks distribution</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGradingSystemModal(false)}
+                className="h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                The grades at the university will be indicated in the following manner:
+              </p>
+
+              <div className="border border-slate-800 rounded-xl overflow-hidden bg-zinc-900/30">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-zinc-900/80 text-[10px] uppercase font-bold text-slate-400">
+                      <th className="p-2.5">Marks Range</th>
+                      <th className="p-2.5 text-center">Grade</th>
+                      <th className="p-2.5 text-center">Grade Point</th>
+                      <th className="p-2.5">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {GRADING_SYSTEM_INFO.map((row, idx) => (
+                      <tr 
+                        key={idx} 
+                        className="border-b border-slate-800/60 last:border-0 hover:bg-white/[0.02] transition"
+                      >
+                        <td className="p-2.5 font-mono text-[11px] text-slate-300">{row.marks}</td>
+                        <td className="p-2.5 font-bold text-center text-indigo-300">{row.grade}</td>
+                        <td className="p-2.5 font-mono font-semibold text-center text-slate-200">({row.points})</td>
+                        <td className="p-2.5 text-slate-400 font-medium">{row.remark || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800/80 bg-zinc-900/30 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowGradingSystemModal(false)}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-semibold rounded-xl transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
