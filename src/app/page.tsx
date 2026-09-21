@@ -38,7 +38,9 @@ import {
   Repeat,
   Layers,
   BadgeCheck,
-  Gauge
+  Gauge,
+  Search,
+  Compass
 } from "lucide-react";
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
 
@@ -380,16 +382,18 @@ export default function Home() {
       const naturalHeight = element.offsetHeight || 700;
       setSnapshotHeight(naturalHeight);
 
-      const parentWidth = window.innerWidth;
-      // Subtract margins & paddings (32px padding for screen edges on mobile, 32px for inner container = 64px)
-      const availableWidth = parentWidth - 64;
+      // Parent container width calculation
+      const scrollParent = element.closest('.overflow-y-auto') as HTMLElement | null;
+      const containerWidth = scrollParent ? scrollParent.clientWidth : window.innerWidth;
+      // Subtract internal padding (16px left + 16px right = 32px safe margin)
+      const availableWidth = Math.max(260, (containerWidth || window.innerWidth) - 32);
       
-      const scaleVal = Math.min(1, Math.max(0.3, availableWidth / 750));
+      const scaleVal = Math.min(1, Math.max(0.25, availableWidth / 750));
       setSnapshotScale(scaleVal);
     };
 
     // Run layout measuring after render
-    const timer = setTimeout(updateScaling, 50);
+    const timer = setTimeout(updateScaling, 60);
     window.addEventListener("resize", updateScaling);
 
     return () => {
@@ -399,6 +403,8 @@ export default function Home() {
   }, [showGradeSheetModal, semesters, mode]);
 
   const [showRoadmapModal, setShowRoadmapModal] = useState<boolean>(false);
+  const [roadmapActiveTab, setRoadmapActiveTab] = useState<'all' | 'dept' | 'outside' | 'gened'>('all');
+  const [roadmapSearch, setRoadmapSearch] = useState<string>('');
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [isMobile, setIsMobile] = useState<boolean>(false);
@@ -1077,9 +1083,9 @@ export default function Home() {
       return (
         <span 
           title="Mandatory Requirement: Because you placed directly into ENG102, ENG103 is required to fulfill your 6-credit GenEd Stream 1 writing comprehension requirement."
-          className="text-[8px] font-extrabold border border-amber-500/30 text-amber-400 bg-amber-500/5 px-1.5 py-0.5 rounded uppercase tracking-wider cursor-help select-none"
+          className="text-[9px] font-extrabold border border-amber-500/30 text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider cursor-help select-none shadow-sm"
         >
-          [Mandatory Core]
+          Mandatory Core
         </span>
       );
     }
@@ -1087,18 +1093,138 @@ export default function Home() {
     const isMand = isCourseMandatory(code);
     if (isMand) {
       return (
-        <span className="text-[8px] font-extrabold border border-amber-500/30 text-amber-400 bg-amber-500/5 px-1.5 py-0.5 rounded uppercase tracking-wider select-none">
-          [Mandatory Core]
+        <span className="text-[9px] font-extrabold border border-amber-500/30 text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider select-none shadow-sm">
+          Mandatory Core
         </span>
       );
     } else {
       return (
-        <span className="text-[8px] font-extrabold border border-slate-800 text-slate-400 bg-zinc-900 px-1.5 py-0.5 rounded uppercase tracking-wider select-none">
-          [Elective]
+        <span className="text-[9px] font-extrabold border border-slate-700/60 text-slate-400 bg-slate-800/40 px-2 py-0.5 rounded-full uppercase tracking-wider select-none">
+          Elective
         </span>
       );
     }
-  }, [isCourseMandatory, onboardingData.pathway, onboardingData.creditOption, onboardingData.engStatusPriorToRS]);
+  }, [onboardingData.pathway, onboardingData.creditOption, onboardingData.engStatusPriorToRS, isCourseMandatory]);
+
+  const getCategoryTheme = useCallback((category?: string, code?: string) => {
+    let cat = category;
+    if (!cat && code) {
+      const found = COURSES.find(c => c.code === code);
+      cat = found?.category || "";
+    }
+    switch (cat) {
+      case "Program Core":
+        return {
+          label: "Program Core",
+          badge: "bg-blue-500/15 border-blue-500/30 text-blue-300",
+          cardBorder: "border-blue-500/25 hover:border-blue-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(59,130,246,0.06)]",
+          codePill: "text-blue-300 border-blue-500/30 bg-blue-950/40",
+          accentColor: "#3b82f6",
+          leftBar: "bg-blue-500"
+        };
+      case "School Core (Math & Sciences)":
+        return {
+          label: "School Core",
+          badge: "bg-cyan-500/15 border-cyan-500/30 text-cyan-300",
+          cardBorder: "border-cyan-500/25 hover:border-cyan-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(6,182,212,0.06)]",
+          codePill: "text-cyan-300 border-cyan-500/30 bg-cyan-950/40",
+          accentColor: "#06b6d4",
+          leftBar: "bg-cyan-500"
+        };
+      case "Capstone (Thesis / Project / Internship)":
+        return {
+          label: "Capstone",
+          badge: "bg-purple-500/15 border-purple-500/30 text-purple-300",
+          cardBorder: "border-purple-500/25 hover:border-purple-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(168,85,247,0.06)]",
+          codePill: "text-purple-300 border-purple-500/30 bg-purple-950/40",
+          accentColor: "#a855f7",
+          leftBar: "bg-purple-500"
+        };
+      case "CSE Major Elective":
+        return {
+          label: "CSE Elective",
+          badge: "bg-amber-500/15 border-amber-500/30 text-amber-300",
+          cardBorder: "border-amber-500/25 hover:border-amber-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(245,158,11,0.06)]",
+          codePill: "text-amber-300 border-amber-500/30 bg-amber-950/40",
+          accentColor: "#f59e0b",
+          leftBar: "bg-amber-500"
+        };
+      case "GenEd Stream 1":
+        return {
+          label: "Stream 1",
+          badge: "bg-rose-500/15 border-rose-500/30 text-rose-300",
+          cardBorder: "border-rose-500/25 hover:border-rose-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(244,63,94,0.06)]",
+          codePill: "text-rose-300 border-rose-500/30 bg-rose-950/40",
+          accentColor: "#f43f5e",
+          leftBar: "bg-rose-500"
+        };
+      case "GenEd Stream 2":
+        return {
+          label: "Stream 2",
+          badge: "bg-indigo-500/15 border-indigo-500/30 text-indigo-300",
+          cardBorder: "border-indigo-500/25 hover:border-indigo-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(99,102,241,0.06)]",
+          codePill: "text-indigo-300 border-indigo-500/30 bg-indigo-950/40",
+          accentColor: "#6366f1",
+          leftBar: "bg-indigo-500"
+        };
+      case "GenEd Stream 3":
+        return {
+          label: "Stream 3",
+          badge: "bg-emerald-500/15 border-emerald-500/30 text-emerald-300",
+          cardBorder: "border-emerald-500/25 hover:border-emerald-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(16,185,129,0.06)]",
+          codePill: "text-emerald-300 border-emerald-500/30 bg-emerald-950/40",
+          accentColor: "#10b981",
+          leftBar: "bg-emerald-500"
+        };
+      case "GenEd Stream 4":
+        return {
+          label: "Stream 4",
+          badge: "bg-violet-500/15 border-violet-500/30 text-violet-300",
+          cardBorder: "border-violet-500/25 hover:border-violet-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(139,92,246,0.06)]",
+          codePill: "text-violet-300 border-violet-500/30 bg-violet-950/40",
+          accentColor: "#8b5cf6",
+          leftBar: "bg-violet-500"
+        };
+      case "GenEd Stream 5":
+        return {
+          label: "Stream 5",
+          badge: "bg-teal-500/15 border-teal-500/30 text-teal-300",
+          cardBorder: "border-teal-500/25 hover:border-teal-500/50",
+          cardGlow: "shadow-[0_0_15px_rgba(20,184,166,0.06)]",
+          codePill: "text-teal-300 border-teal-500/30 bg-teal-950/40",
+          accentColor: "#14b8a6",
+          leftBar: "bg-teal-500"
+        };
+      case "Non-Credit":
+        return {
+          label: "Non-Credit",
+          badge: "bg-zinc-800/50 border-zinc-700/60 text-slate-400",
+          cardBorder: "border-zinc-800/80 hover:border-zinc-700/80",
+          cardGlow: "",
+          codePill: "text-slate-300 border-zinc-700/60 bg-zinc-900/60",
+          accentColor: "#64748b",
+          leftBar: "bg-slate-600"
+        };
+      default:
+        return {
+          label: "Elective",
+          badge: "bg-zinc-800/50 border-zinc-700/60 text-slate-400",
+          cardBorder: "border-zinc-800/80 hover:border-zinc-700/80",
+          cardGlow: "",
+          codePill: "text-slate-300 border-zinc-700/60 bg-zinc-900/60",
+          accentColor: "#64748b",
+          leftBar: "bg-slate-600"
+        };
+    }
+  }, []);
 
   // Chronological term/year calculation for semesters
   const semesterIntakes = useMemo(() => {
@@ -2077,27 +2203,32 @@ export default function Home() {
 
   const CSE400 = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) => {
     return (
-      <div className="bg-zinc-950/75 border border-slate-800 rounded-xl p-6 backdrop-blur-md shadow-2xl relative overflow-hidden mt-6">
-        <div className="absolute top-0 right-0 h-40 w-40 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-[#08080d]/95 border border-purple-500/30 rounded-3xl p-6 backdrop-blur-md shadow-2xl relative overflow-hidden mt-8">
+        <div className="absolute top-0 right-0 h-40 w-40 bg-purple-500/[0.04] rounded-full blur-3xl pointer-events-none" />
         
-        <div className={`flex flex-wrap items-center justify-between gap-3 ${isCollapsed ? "" : "border-b border-slate-800/80 pb-4 mb-6"}`}>
-          <div>
-            <h3 className="font-extrabold text-base text-slate-100 tracking-tight flex items-center gap-2">
-              <FileText className="h-4.5 w-4.5 text-indigo-400" />
-              CSE400
-            </h3>
-            <p className="text-xs text-zinc-450 mt-1">Final Year Capstone: Thesis, Project, or Internship</p>
+        <div className={`flex flex-wrap items-center justify-between gap-3 ${isCollapsed ? "" : "border-b border-white/[0.06] pb-5 mb-6"}`}>
+          <div className="flex items-center gap-3.5">
+            <div className="h-10 w-10 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.2)] shrink-0">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-white tracking-tight">
+                CSE400 — Final Year Capstone
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">Academic Research Thesis, Engineering Project, or Corporate Internship</p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold bg-zinc-950/40 border border-slate-800 text-indigo-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
+
+          <div className="flex items-center gap-2.5">
+            <span className="text-[11px] font-bold bg-[#0e0e14] border border-purple-500/30 text-purple-300 px-3 py-1.5 rounded-full uppercase tracking-wider shadow-sm">
               {isCSE400Passed ? "Completed: 4 / 4 Cr" : "Incomplete: 0 / 4 Cr"}
             </span>
             {isCSE400Passed ? (
-              <span className="text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span className="text-[11px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full uppercase tracking-wider shadow-[0_0_12px_rgba(16,185,129,0.15)]">
                 Passed / Defended
               </span>
             ) : (
-              <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/20 text-orange-400 px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span className="text-[11px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 px-3 py-1.5 rounded-full uppercase tracking-wider shadow-[0_0_12px_rgba(245,158,11,0.15)]">
                 In Progress
               </span>
             )}
@@ -2111,7 +2242,7 @@ export default function Home() {
                 }
               }}
               aria-label="Toggle Capstone Module"
-              className="relative z-30 pointer-events-auto cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-slate-800/60 text-slate-100 hover:text-slate-100 transition-all select-none flex-shrink-0"
+              className="relative z-30 pointer-events-auto cursor-pointer flex items-center justify-center w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/[0.08] text-slate-300 hover:text-white transition-all select-none flex-shrink-0"
               title={isCollapsed ? "Expand Capstone" : "Minimize Capstone"}
             >
               {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -2124,7 +2255,7 @@ export default function Home() {
             {/* Track selector tabs/cards */}
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Choose Capstone Track Path</label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 {(['thesis', 'project', 'internship'] as const).map(track => {
                   const isSelected = thesisTrack === track;
                   let desc = "";
@@ -2147,20 +2278,20 @@ export default function Home() {
                         setThesisTrack(track);
                         saveStateToLocalStorage(mode, isOnboarded, semesters, track, thesisSteps, projectCompleted, internshipCompleted, onboardingData);
                       }}
-                      className={`p-4 rounded-xl border text-left flex flex-col justify-between transition-all duration-300 group ${
+                      className={`p-4 sm:p-5 rounded-2xl border text-left flex flex-col justify-between transition-all duration-200 cursor-pointer group ${
                         isSelected 
-                          ? 'border-indigo-400 bg-indigo-500/10 text-slate-100 font-semibold shadow-[0_0_12px_rgba(99,102,241,0.15)]' 
-                          : 'bg-zinc-900/40 border-slate-800 hover:border-zinc-700 text-slate-400 hover:bg-white/5 hover:text-slate-100'
+                          ? 'border-purple-500 bg-purple-950/25 text-white font-semibold shadow-[0_0_20px_rgba(168,85,247,0.2)]' 
+                          : 'bg-[#0a0a10] border border-white/[0.08] hover:border-white/[0.18] hover:bg-[#0e0e14] text-slate-400 hover:text-white'
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <span className={`font-bold text-xs ${isSelected ? 'text-indigo-400 font-extrabold' : 'text-zinc-350'}`}>
+                          <span className={`font-bold text-sm ${isSelected ? 'text-purple-300 font-extrabold' : 'text-slate-200'}`}>
                             {title}
                           </span>
-                          <span className={`h-2 w-2 rounded-full transition ${isSelected ? 'bg-indigo-500 shadow-[0_0_8px_#6366f1]' : 'bg-zinc-800'}`} />
+                          <span className={`h-2.5 w-2.5 rounded-full transition ${isSelected ? 'bg-purple-400 shadow-[0_0_8px_#c084fc]' : 'bg-slate-700'}`} />
                         </div>
-                        <p className="text-[10px] leading-relaxed text-slate-400 group-hover:text-zinc-405 transition">
+                        <p className="text-xs leading-relaxed text-slate-400 group-hover:text-slate-300 transition">
                           {desc}
                         </p>
                       </div>
@@ -2171,13 +2302,13 @@ export default function Home() {
             </div>
 
             {/* Checklist & Grade details */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t border-slate-800/80">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4 border-t border-white/[0.06]">
               <div className="space-y-3">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Milestone Checklist</p>
                 
                 {thesisTrack === 'thesis' && (
-                  <div className="space-y-3 bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
-                    <div className="flex items-center gap-3 text-xs text-slate-100 select-none">
+                  <div className="space-y-3 bg-[#0a0a10] border border-white/[0.08] p-5 rounded-2xl">
+                    <div className="flex items-center gap-3 text-xs text-slate-200 select-none">
                       <button
                         type="button"
                         onClick={() => {
@@ -2185,19 +2316,15 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                        className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none ${
                           thesisSteps.step1
-                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-white/20 bg-white/[0.03] hover:border-white/40'
                         }`}
                       >
-                        {thesisSteps.step1 ? (
-                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          </div>
-                        ) : null}
+                        {thesisSteps.step1 && (
+                          <Check className="h-3 w-3 text-white stroke-[3]" />
+                        )}
                       </button>
                       <span
                         onClick={() => {
@@ -2205,12 +2332,12 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className="cursor-pointer hover:text-white transition-colors"
+                        className="cursor-pointer hover:text-white transition-colors font-medium"
                       >
-                        Step 1: Thesis Topic & Advisor Approved
+                        Step 1: Thesis Topic &amp; Advisor Approved
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-100 select-none">
+                    <div className="flex items-center gap-3 text-xs text-slate-200 select-none">
                       <button
                         type="button"
                         onClick={() => {
@@ -2218,19 +2345,15 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                        className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none ${
                           thesisSteps.step2
-                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-white/20 bg-white/[0.03] hover:border-white/40'
                         }`}
                       >
-                        {thesisSteps.step2 ? (
-                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          </div>
-                        ) : null}
+                        {thesisSteps.step2 && (
+                          <Check className="h-3 w-3 text-white stroke-[3]" />
+                        )}
                       </button>
                       <span
                         onClick={() => {
@@ -2238,42 +2361,38 @@ export default function Home() {
                           setThesisSteps(updatedSteps);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, updatedSteps, projectCompleted, internshipCompleted, onboardingData);
                         }}
-                        className="cursor-pointer hover:text-white transition-colors"
+                        className="cursor-pointer hover:text-white transition-colors font-medium"
                       >
                         Step 2: Mid-term defense cleared
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-100 select-none">
+                    <div className="flex items-center gap-3 text-xs text-slate-200 select-none">
                       <button
                         type="button"
                         onClick={() => handleThesisStep3Toggle(!thesisSteps.step3)}
-                        className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                        className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none ${
                           thesisSteps.step3
-                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-white/20 bg-white/[0.03] hover:border-white/40'
                         }`}
                       >
-                        {thesisSteps.step3 ? (
-                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          </div>
-                        ) : null}
+                        {thesisSteps.step3 && (
+                          <Check className="h-3 w-3 text-white stroke-[3]" />
+                        )}
                       </button>
                       <span
                         onClick={() => handleThesisStep3Toggle(!thesisSteps.step3)}
-                        className="font-semibold text-slate-100 cursor-pointer hover:text-white transition-colors"
+                        className="font-semibold text-white cursor-pointer hover:text-purple-300 transition-colors"
                       >
-                        Step 3: Final defense report defended & approved
+                        Step 3: Final defense report defended &amp; approved
                       </span>
                     </div>
                   </div>
                 )}
 
                 {thesisTrack === 'project' && (
-                  <div className="bg-zinc-900/30 border border-slate-800 p-4 rounded-xl">
-                    <div className="flex items-start gap-3 text-xs text-slate-100 select-none">
+                  <div className="bg-[#0a0a10] border border-white/[0.08] p-5 rounded-2xl">
+                    <div className="flex items-start gap-3 text-xs text-slate-200 select-none">
                       <button
                         type="button"
                         onClick={() => {
@@ -2282,19 +2401,15 @@ export default function Home() {
                           handleCSE400CompletionToggle(nextVal);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, nextVal, internshipCompleted, onboardingData);
                         }}
-                        className={`h-4.5 w-4.5 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
+                        className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none mt-0.5 ${
                           projectCompleted
-                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-white/20 bg-white/[0.03] hover:border-white/40'
                         }`}
                       >
-                        {projectCompleted ? (
-                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          </div>
-                        ) : null}
+                        {projectCompleted && (
+                          <Check className="h-3 w-3 text-white stroke-[3]" />
+                        )}
                       </button>
                       <div
                         onClick={() => {
@@ -2305,16 +2420,16 @@ export default function Home() {
                         }}
                         className="cursor-pointer"
                       >
-                        <p className="font-semibold text-slate-100 hover:text-white transition-colors">Final Project Built & Defended</p>
-                        <p className="text-[10px] text-zinc-555 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
+                        <p className="font-semibold text-white hover:text-purple-300 transition-colors">Final Project Built &amp; Defended</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {thesisTrack === 'internship' && (
-                  <div className="bg-zinc-900/30 border border-slate-800/40 p-4 rounded-xl">
-                    <div className="flex items-start gap-3 text-xs text-slate-100 select-none">
+                  <div className="bg-[#0a0a10] border border-white/[0.08] p-5 rounded-2xl">
+                    <div className="flex items-start gap-3 text-xs text-slate-200 select-none">
                       <button
                         type="button"
                         onClick={() => {
@@ -2323,19 +2438,15 @@ export default function Home() {
                           handleCSE400CompletionToggle(nextVal);
                           saveStateToLocalStorage(mode, isOnboarded, semesters, thesisTrack, thesisSteps, projectCompleted, nextVal, onboardingData);
                         }}
-                        className={`h-4.5 w-4.5 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center mt-0.5 ${
+                        className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none mt-0.5 ${
                           internshipCompleted
-                            ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                            : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                            : 'border-white/20 bg-white/[0.03] hover:border-white/40'
                         }`}
                       >
-                        {internshipCompleted ? (
-                          <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                            <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                            </svg>
-                          </div>
-                        ) : null}
+                        {internshipCompleted && (
+                          <Check className="h-3 w-3 text-white stroke-[3]" />
+                        )}
                       </button>
                       <div
                         onClick={() => {
@@ -2346,8 +2457,8 @@ export default function Home() {
                         }}
                         className="cursor-pointer"
                       >
-                        <p className="font-semibold text-slate-100 hover:text-white transition-colors">Internship Completed & Report Submitted</p>
-                        <p className="text-[10px] text-zinc-555 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
+                        <p className="font-semibold text-white hover:text-purple-300 transition-colors">Internship Completed &amp; Report Submitted</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Marks capstone complete and awards 4 degree credits</p>
                       </div>
                     </div>
                   </div>
@@ -2355,15 +2466,15 @@ export default function Home() {
               </div>
 
               {mode === 'gpa' && (
-                <div className="space-y-3 bg-zinc-900/30 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
+                <div className="space-y-3 bg-[#0a0a10] border border-white/[0.08] p-5 rounded-2xl flex flex-col justify-between">
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Final Capstone Grade</label>
-                    <p className="text-[10px] text-slate-400 leading-relaxed">Select the final grade scored in CSE400 for cumulative CGPA calculation.</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">Select the final grade scored in CSE400 for cumulative CGPA calculation.</p>
                   </div>
                   <select
                     value={cse400Course?.grade || ""}
                     onChange={(e) => handleCSE400GradeChange(e.target.value)}
-                    className="bg-zinc-900 border border-slate-800 text-xs text-slate-100 rounded-xl px-3 py-2 w-full focus:border-purple-500 outline-none cursor-pointer mt-2 font-semibold"
+                    className="bg-[#050508] border border-white/[0.1] text-xs text-slate-100 rounded-xl px-3.5 py-2.5 w-full focus:border-purple-400 outline-none cursor-pointer mt-3 font-semibold shadow-inner transition"
                   >
                     <option value="">Select Grade</option>
                     {Object.keys(GRADING_SCALE).map(g => (
@@ -2573,21 +2684,21 @@ export default function Home() {
 
   if (!showDashboard) {
     return (
-      <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
-        {/* Glow ambient background lights */}
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/15 blur-[150px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/15 blur-[150px] pointer-events-none" />
-        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] rounded-full bg-indigo-500/10 blur-[140px] pointer-events-none z-0" />
+      <div className="min-h-screen w-full bg-[#030304] bg-gradient-to-b from-[#030304] via-[#060609] to-[#0a0a0f] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
+        {/* Ambient background glow accents */}
+        <div className="absolute top-[-15%] left-[-8%] w-[50%] h-[50%] rounded-full bg-blue-600/[0.08] blur-[160px] pointer-events-none" />
+        <div className="absolute bottom-[-15%] right-[-8%] w-[50%] h-[50%] rounded-full bg-purple-600/[0.08] blur-[160px] pointer-events-none" />
+        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-indigo-600/[0.05] blur-[180px] pointer-events-none z-0" />
 
         {/* Top Header/Bar for Landing */}
-        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-slate-800/40 relative z-10">
+        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-white/[0.06] relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)] shrink-0">
-              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 border border-blue-400/30 flex items-center justify-center shadow-[0_4px_20px_rgba(59,130,246,0.3)] shrink-0">
+              <svg className="h-5.5 w-5.5 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
-            <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-black tracking-tight text-white">
               Flow136
             </h1>
           </div>
@@ -2595,12 +2706,12 @@ export default function Home() {
 
         {/* Hero Section */}
         <main className="flex-grow flex flex-col items-center justify-center text-center px-4 py-16 relative z-10 max-w-6xl mx-auto w-full">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-slate-800 text-xs font-semibold text-indigo-300 mb-8 animate-pulse">
-            <GraduationCap className="h-4 w-4" />
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs font-semibold text-indigo-300 mb-8 backdrop-blur-md shadow-sm">
+            <GraduationCap className="h-4 w-4 text-indigo-400" />
             <span>BRACU CSE Degree Companion</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-indigo-300 max-w-5xl mx-auto leading-none mb-6">
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400 max-w-5xl mx-auto leading-none mb-6">
             Welcome to Flow136
           </h1>
 
@@ -2608,8 +2719,8 @@ export default function Home() {
             Your curriculum, minus the complexity.
           </p>
 
-          <p className="text-xs md:text-sm text-slate-450 font-semibold mt-3 mb-10 max-w-md mx-auto leading-relaxed text-center">
-            A progress tracker for BRACU CSE Undergrads.
+          <p className="text-xs md:text-sm text-slate-400 font-medium mt-3 mb-10 max-w-md mx-auto leading-relaxed text-center">
+            Interactive progress tracker, prerequisite validator & graduation planner for BRACU CSE.
           </p>
 
           {/* Glowing CTA Button */}
@@ -2621,7 +2732,7 @@ export default function Home() {
                   handleTutorialStepChange(2);
                 }
               }}
-              className={`bg-indigo-600 hover:bg-indigo-500 text-slate-100 shadow-[0_0_20px_rgba(99,102,241,0.5)] hover:shadow-[0_0_30px_rgba(99,102,241,0.8)] transition-all duration-300 rounded-full px-10 py-5 font-bold text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-2.5 ${getHighlightClass('cta-button')}`}
+              className={`bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white shadow-[0_0_28px_rgba(79,70,229,0.38)] hover:shadow-[0_0_40px_rgba(79,70,229,0.58)] transition-all duration-300 rounded-2xl px-10 py-4.5 font-bold text-base md:text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-3 border border-blue-400/30 ${getHighlightClass('cta-button')}`}
               data-tutorial="cta-button"
             >
               <span>Continue to Tracker</span>
@@ -2633,61 +2744,61 @@ export default function Home() {
           <div className="w-full">
             <div className="text-center mb-10">
               <h2 className="text-xs uppercase tracking-widest text-slate-400 font-bold">Core Features</h2>
-              <div className="h-1 w-12 bg-indigo-500 mx-auto mt-2 rounded-full" />
+              <div className="h-1 w-12 bg-gradient-to-r from-blue-500 to-indigo-500 mx-auto mt-2 rounded-full" />
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
               {/* Feature 1 */}
-              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-indigo-500/10 border border-slate-800/80 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 group-hover:scale-110 transition-all duration-300">
+              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-blue-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
                   <GraduationCap className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA Tracker</h3>
-                <p className="text-xs text-slate-450 leading-relaxed font-medium">
+                <p className="text-xs text-slate-400 leading-relaxed font-normal">
                   Log grades, track semester GPAs, and monitor cumulative progress dynamically.
                 </p>
               </div>
 
               {/* Feature 2 */}
-              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-purple-500/10 border border-slate-800/80 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 group-hover:scale-110 transition-all duration-300">
+              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-purple-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(168,85,247,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
                   <BookOpen className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">GenEd Progress Tracker</h3>
-                <p className="text-xs text-slate-450 leading-relaxed font-medium">
+                <h3 className="text-sm font-bold text-slate-100 mb-2">GenEd Progress</h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-normal">
                   Auto-validate GenEd stream distributions and ensure all graduation credits align.
                 </p>
               </div>
 
               {/* Feature 3 */}
-              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all duration-300">
+              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-emerald-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(16,185,129,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
                   <TrendingUp className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA ROI Analyzer</h3>
-                <p className="text-xs text-slate-450 leading-relaxed font-medium">
+                <p className="text-xs text-slate-450 leading-relaxed font-normal">
                   Analyze retake options and see the exact return on investment for grade improvements.
                 </p>
               </div>
 
               {/* Feature 4 */}
-              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 mb-4 group-hover:bg-pink-500/20 group-hover:scale-110 transition-all duration-300">
+              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-amber-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(245,158,11,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
                   <Target className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">Target CGPA Calculator</h3>
-                <p className="text-xs text-slate-450 leading-relaxed font-medium">
+                <h3 className="text-sm font-bold text-slate-100 mb-2">Target Calculator</h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-normal">
                   Solve exactly what GPAs you need in future semesters to reach your target goals.
                 </p>
               </div>
 
               {/* Feature 5 */}
-              <div className="bg-zinc-950/35 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col items-center text-center hover:border-indigo-500/30 hover:shadow-[0_0_25px_rgba(99,102,241,0.08)] transition-all duration-500 group hover:-translate-y-1">
-                <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 group-hover:scale-110 transition-all duration-300">
+              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-rose-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(244,63,94,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 mb-4 group-hover:bg-rose-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
                   <Camera className="h-6 w-6" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-100 mb-2">Snapshot Progress</h3>
-                <p className="text-xs text-slate-450 leading-relaxed font-medium">
+                <p className="text-xs text-slate-400 leading-relaxed font-normal">
                   Instantly download your official curriculum progress as a crisp PNG image.
                 </p>
               </div>
@@ -2696,33 +2807,32 @@ export default function Home() {
         </main>
 
         {/* Landing Page Footer */}
-        <footer className="w-full py-10 px-6 border-t border-slate-800/40 bg-[#050507]/40 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
-          {/* Connect with me social links (Scaled Up) */}
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm font-semibold text-slate-100">
-            <span className="text-sm lg:text-base font-bold text-slate-400 tracking-wider uppercase leading-none">Connect with me:</span>
+        <footer className="w-full py-10 px-6 border-t border-white/[0.06] bg-[#050508]/80 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
+          {/* Connect with me social links */}
+          <div className="flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-slate-100">
+            <span className="text-xs font-bold text-slate-400 tracking-wider uppercase leading-none self-center">Connect with me:</span>
             <a
               href="https://github.com/fakekhanabdullah"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,241,0.8)] active:scale-95 transition-all duration-300 leading-none"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.16] text-xs text-slate-300 hover:text-white transition-all duration-200"
             >
-              <svg className="h-5.5 w-5.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-              <span className="leading-none">GitHub</span>
+              <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+              <span>GitHub</span>
             </a>
-            <span className="text-slate-600 select-none px-1 self-center">|</span>
             <a
               href="https://www.linkedin.com/in/khan-abdullahh"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-base hover:text-indigo-400 hover:scale-105 hover:drop-shadow-[0_0_8px_rgba(129,140,241,0.8)] active:scale-95 transition-all duration-300 leading-none"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.16] text-xs text-slate-300 hover:text-white transition-all duration-200"
             >
-              <svg className="h-5.5 w-5.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-              <span className="leading-none">LinkedIn</span>
+              <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+              <span>LinkedIn</span>
             </a>
           </div>
 
-          {/* Muted Copyright Disclaimer (Scaled Up) */}
-          <div className="text-xs text-zinc-450 leading-relaxed font-semibold">
+          {/* Muted Copyright Disclaimer */}
+          <div className="text-xs text-slate-400 leading-relaxed font-normal">
             <p>© 2026 Flow136. Made by: Khan Abdullah</p>
           </div>
 
@@ -2735,43 +2845,46 @@ export default function Home() {
     );
   }
 
+
   return (
-    <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col">
-      <header className="border-b border-slate-800/80 bg-[#050507]/90 backdrop-blur-md sticky top-0 z-40 px-4 sm:px-6 py-4 shadow-2xl shadow-black/30 w-full relative">
+    <div className="min-h-screen w-full bg-[#030304] bg-gradient-to-b from-[#030304] via-[#050508] to-[#07070b] text-slate-100 font-sans antialiased flex flex-col">
+      <header className="border-b border-white/[0.08] bg-[#050508]/90 backdrop-blur-xl sticky top-0 z-40 px-4 sm:px-6 py-3.5 shadow-2xl shadow-black/40 w-full relative">
         {/* Desktop Header Layout (Screens >= 1024px) */}
-        <div className="hidden lg:flex w-full max-w-7xl mx-auto items-center justify-between relative min-h-[48px]">
+        <div className="hidden lg:flex w-full max-w-7xl mx-auto items-center justify-between relative min-h-[50px]">
           {/* Left: Logo */}
           <div 
             onClick={() => setShowDashboard(false)}
-            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all relative z-20 shrink-0"
+            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-90 active:scale-95 transition-all relative z-20 shrink-0"
             title="Back to Landing Page"
           >
-            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)] shrink-0">
-              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 border border-blue-400/30 flex items-center justify-center shadow-[0_8px_22px_rgba(37,99,235,0.32)] shrink-0">
+              <svg className="h-5.5 w-5.5 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
-            <h1 className="text-lg font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-black tracking-tight text-white">
               Flow136
             </h1>
           </div>
 
           {/* Center: Mode Toggler (Dead Center) */}
           <div 
-            className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex ${getHighlightClass('mode-toggler')}`}
+            className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-[#08080d] border border-white/[0.08] p-1.5 rounded-2xl flex shadow-inner gap-1.5 ${getHighlightClass('mode-toggler')}`}
             data-tutorial="mode-toggler"
           >
             <button
+              type="button"
               onClick={() => mode !== 'tracker' && handleModeToggle()}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 mode === 'tracker' 
-                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
-                  : 'text-slate-400 hover:text-slate-100'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
               }`}
             >
               Course Tracker Only
             </button>
             <button
+              type="button"
               onClick={() => {
                 if (mode !== 'gpa') {
                   handleModeToggle();
@@ -2780,10 +2893,10 @@ export default function Home() {
                   }
                 }
               }}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 mode === 'gpa' 
-                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
-                  : 'text-slate-400 hover:text-slate-100'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
               }`}
             >
               Course + CGPA Planner
@@ -2794,26 +2907,28 @@ export default function Home() {
           <div className="flex items-center gap-3 relative z-20">
             {/* 1. Feeling lost? */}
             <button
+              type="button"
               onClick={() => setShowRoadmapModal(true)}
-              className={`inline-flex items-center gap-2 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
+              className={`inline-flex items-center gap-2 bg-[#0c0c12] hover:bg-[#121218] border border-white/[0.08] hover:border-indigo-500/40 text-indigo-300 hover:text-white text-xs font-bold px-4 py-2.5 rounded-2xl transition-all cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
               title="View recommended CSE/CS curriculum roadmap"
               data-tutorial="feeling-lost-btn"
             >
-              <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+              <HelpCircle className="h-4 w-4 text-indigo-400" />
               <span>Feeling lost?</span>
             </button>
 
             {/* 2. Hamburger Dropdown Menu */}
             <div className="relative">
               <button
+                type="button"
                 onClick={() => {
                   setShowDataDropdown(!showDataDropdown);
                   setShowHeaderMenu(false);
                 }}
-                className={`h-8.5 w-8.5 rounded-xl border flex items-center justify-center transition-all text-xs font-semibold cursor-pointer ${
+                className={`h-10 w-10 rounded-2xl border flex items-center justify-center transition-all text-xs font-semibold cursor-pointer ${
                   showDataDropdown 
-                    ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
-                    : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
+                    ? 'bg-blue-600/15 border-blue-500 text-blue-400 shadow-lg shadow-blue-500/20' 
+                    : 'bg-[#0c0c12] hover:bg-[#121218] border-white/[0.08] text-slate-300 hover:text-white hover:border-white/[0.16]'
                 } ${getHighlightClass('hamburger-menu')}`}
                 title="Menu"
                 data-tutorial="hamburger-menu"
@@ -2824,20 +2939,21 @@ export default function Home() {
               </button>
 
               {showDataDropdown && (
-                <div className="absolute right-0 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
+                <div className="absolute right-0 mt-2 w-56 bg-[#09090e] border border-white/[0.1] rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
                   <button
+                    type="button"
                     onClick={() => {
                       handleExportBackup();
                       setShowDataDropdown(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                    className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <Download className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Backup</span>
+                    <Download className="h-4 w-4 text-blue-400" />
+                    <span>Backup Data</span>
                   </button>
-                  <label className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 cursor-pointer transition">
-                    <Upload className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Restore</span>
+                  <label className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 cursor-pointer transition font-medium">
+                    <Upload className="h-4 w-4 text-indigo-400" />
+                    <span>Restore Data</span>
                     <input
                       type="file"
                       accept=".json"
@@ -2849,24 +2965,26 @@ export default function Home() {
                     />
                   </label>
                   <button
+                    type="button"
                     onClick={() => {
                       setShowGradeSheetModal(true);
                       setShowDataDropdown(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                    className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <Camera className="h-3.5 w-3.5 text-indigo-400" />
+                    <Camera className="h-4 w-4 text-purple-400" />
                     <span>Snapshot Progress</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setTutorialStep(5);
                       setShowDashboard(true);
                       setShowDataDropdown(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                    className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                    <HelpCircle className="h-4 w-4 text-amber-400" />
                     <span>Restart Tour</span>
                   </button>
                 </div>
@@ -2875,48 +2993,52 @@ export default function Home() {
 
             {/* 3. Reset Button */}
             <button
+              type="button"
               onClick={() => setShowResetConfirm(true)}
               title="Reset tracker to onboarding defaults"
-              className="bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/20 text-rose-400 p-2.5 rounded-xl transition cursor-pointer"
+              className="h-10 w-10 rounded-2xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 hover:border-rose-700/50 text-rose-400 flex items-center justify-center transition cursor-pointer shadow-sm"
             >
               <RotateCcw className="h-4 w-4" />
             </button>
           </div>
         </div>
-        {/* Mobile Header Layout (Screens < 1024px - Vertically Stacked & Center-Aligned) */}
-        <div className="flex lg:hidden flex-col items-center text-center gap-4 w-full">
+
+        {/* Mobile Header Layout (Screens < 1024px - Vertically Stacked & Center-Aligned) */}
+        <div className="flex lg:hidden flex-col items-center text-center gap-3.5 w-full">
           {/* 1. Logo and Catchphrase */}
           <div 
             onClick={() => setShowDashboard(false)}
-            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-85 active:scale-98 transition-all"
+            className="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-85 active:scale-95 transition-all"
             title="Back to Landing Page"
           >
-            <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)] shrink-0">
-              <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 border border-blue-400/30 flex items-center justify-center shadow-[0_6px_18px_rgba(37,99,235,0.3)] shrink-0">
+              <svg className="h-5 w-5 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
             </div>
-            <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-black tracking-tight text-white">
               Flow136
             </h1>
           </div>
 
           {/* 2. Mode Toggler */}
           <div 
-            className={`bg-zinc-950/40 border border-slate-800/40 p-1 rounded-xl flex w-full max-w-[320px] justify-between ${getHighlightClass('mode-toggler')}`}
+            className={`bg-[#08080d] border border-white/[0.08] p-1.5 rounded-2xl flex w-full max-w-[340px] justify-between gap-1 shadow-inner ${getHighlightClass('mode-toggler')}`}
             data-tutorial="mode-toggler"
           >
             <button
+              type="button"
               onClick={() => mode !== 'tracker' && handleModeToggle()}
-              className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
+              className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-all text-center cursor-pointer ${
                 mode === 'tracker' 
-                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
                   : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               Course Tracker Only
             </button>
             <button
+              type="button"
               onClick={() => {
                 if (mode !== 'gpa') {
                   handleModeToggle();
@@ -2925,9 +3047,9 @@ export default function Home() {
                   }
                 }
               }}
-              className={`flex-1 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all text-center ${
+              className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-all text-center cursor-pointer ${
                 mode === 'gpa' 
-                  ? 'bg-indigo-950/20 text-indigo-400 border border-slate-800 shadow-md' 
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
                   : 'text-slate-400 hover:text-slate-100'
               }`}
             >
@@ -2936,11 +3058,12 @@ export default function Home() {
           </div>
 
           {/* 3. Actions Row: Help, Reset, Hamburger */}
-          <div className="w-full max-w-[240px] flex gap-2 justify-center">
+          <div className="w-full max-w-[260px] flex gap-2.5 justify-center">
             {/* Help/Roadmap Button */}
             <button
+              type="button"
               onClick={() => setShowRoadmapModal(true)}
-              className={`h-10 w-10 bg-slate-900/80 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-white flex items-center justify-center rounded-xl transition cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
+              className={`h-10 w-10 bg-[#0c0c12] hover:bg-[#121218] border border-white/[0.08] text-indigo-300 hover:text-white flex items-center justify-center rounded-2xl transition cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
               title="View recommended CSE/CS curriculum roadmap"
               data-tutorial="feeling-lost-btn"
             >
@@ -2949,48 +3072,52 @@ export default function Home() {
 
             {/* Reset Button */}
             <button
+              type="button"
               onClick={() => setShowResetConfirm(true)}
-              className="h-10 w-10 bg-rose-950/10 hover:bg-rose-950/20 border border-rose-900/20 text-rose-400 flex items-center justify-center rounded-xl transition cursor-pointer"
-              title="Reset Tracker Defaults"
+              title="Reset tracker to onboarding defaults"
+              className="h-10 w-10 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 text-rose-400 flex items-center justify-center rounded-2xl transition cursor-pointer shadow-sm"
             >
-              <RotateCcw className="h-4 w-4 text-rose-400" />
+              <RotateCcw className="h-4 w-4" />
             </button>
 
-            {/* Hamburger Menu Wrapper */}
+            {/* Mobile Hamburger Menu Toggle */}
             <div className="relative">
               <button
+                type="button"
                 onClick={() => {
                   setShowHeaderMenu(!showHeaderMenu);
                   setShowDataDropdown(false);
                 }}
-                className={`h-10 w-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                className={`h-10 w-10 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
                   showHeaderMenu 
-                    ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 shadow-lg' 
-                    : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-800/85'
+                    ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-md shadow-blue-500/20' 
+                    : 'bg-[#0c0c12] hover:bg-[#121218] border-white/[0.08] text-slate-300 hover:text-white'
                 } ${getHighlightClass('hamburger-menu')}`}
                 title="Menu"
                 data-tutorial="hamburger-menu"
               >
-                <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                 </svg>
               </button>
 
+              {/* Mobile Menu Dropdown */}
               {showHeaderMenu && (
-                <div className="absolute left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl p-2.5 z-50 flex flex-col gap-1">
+                <div className="absolute right-0 mt-2 w-56 bg-[#09090e] border border-white/[0.1] rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
                   <button
+                    type="button"
                     onClick={() => {
                       handleExportBackup();
                       setShowHeaderMenu(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                    className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <Download className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Backup</span>
+                    <Download className="h-4 w-4 text-blue-400" />
+                    <span>Backup Data</span>
                   </button>
-                  <label className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 cursor-pointer transition">
-                    <Upload className="h-3.5 w-3.5 text-indigo-400" />
-                    <span>Restore</span>
+                  <label className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 cursor-pointer transition font-medium">
+                    <Upload className="h-4 w-4 text-indigo-400" />
+                    <span>Restore Data</span>
                     <input
                       type="file"
                       accept=".json"
@@ -3002,24 +3129,26 @@ export default function Home() {
                     />
                   </label>
                   <button
+                    type="button"
                     onClick={() => {
                       setShowGradeSheetModal(true);
                       setShowHeaderMenu(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                    className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <Camera className="h-3.5 w-3.5 text-indigo-400" />
+                    <Camera className="h-4 w-4 text-purple-400" />
                     <span>Snapshot Progress</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setTutorialStep(5);
                       setShowDashboard(true);
                       setShowHeaderMenu(false);
                     }}
-                    className="w-full px-2.5 py-2 hover:bg-slate-900/60 text-left text-xs text-slate-100 hover:text-white rounded-lg flex items-center gap-2 transition"
+                    className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
                   >
-                    <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+                    <HelpCircle className="h-4 w-4 text-amber-400" />
                     <span>Restart Tour</span>
                   </button>
                 </div>
@@ -3067,38 +3196,41 @@ export default function Home() {
 
       {/* 3. Main Dashboard Layout */}      {!isOnboarded ? (
         /* Onboarding Wizard Modal overlay if not onboarded */
-        <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12]">
-          <div className="w-full max-w-xl mx-auto bg-[#09090b] border border-slate-800 rounded-xl shadow-2xl relative overflow-hidden p-6 space-y-6">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#030304] bg-gradient-to-b from-[#030304] via-[#08080d] to-[#030304]">
+          <div className="w-full max-w-xl mx-auto bg-[#08080d]/95 border border-slate-700/80 rounded-3xl shadow-2xl relative overflow-hidden p-6 sm:p-8 space-y-6">
             
             {/* Ambient glows inside card */}
-            <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] rounded-full bg-indigo-500/5 blur-[100px] pointer-events-none" />
-            <div className="absolute bottom-[-20%] right-[-20%] w-[50%] h-[50%] rounded-full bg-purple-500/5 blur-[100px] pointer-events-none" />
+            <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-[-20%] right-[-20%] w-[50%] h-[50%] rounded-full bg-indigo-500/10 blur-[100px] pointer-events-none" />
 
             {/* Header & Step Indicators */}
             <div className="relative z-10 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400">
-                    <svg className="h-4 w-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                    <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                     </svg>
                   </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Curriculum Setup</h3>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0e0e14] border border-slate-800">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step</span>
-                  <span className="text-xs font-bold text-indigo-400">{wizardStep}/3</span>
+                  <span className="text-xs font-black text-indigo-400">{wizardStep}/3</span>
                 </div>
               </div>
 
               {/* Progress bar */}
-              <div className="flex gap-1.5 w-full">
+              <div className="flex gap-2 w-full">
                 {[1, 2, 3].map(s => (
                   <div
                     key={s}
-                    className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                    className={`h-2 flex-1 rounded-full transition-all duration-500 ${
                       s <= wizardStep 
-                        ? 'bg-indigo-500' 
-                        : 'bg-slate-800/80'
+                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 shadow-sm shadow-indigo-500/30' 
+                        : 'bg-[#0e0e14] border border-slate-800/80'
                     }`}
                   />
                 ))}
@@ -3109,15 +3241,15 @@ export default function Home() {
             {wizardStep === 1 && (
               <div className="space-y-6 relative z-10">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-slate-100">1st Semester Starting State</h2>
-                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  <h2 className="text-xl font-black tracking-tight text-white">1st Semester Starting State</h2>
+                  <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">
                     How did you start your 1st Semester at BRACU? Choose your starting entry point to map your calculus and English pathways.
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   {/* Pathway Buttons */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3.5">
                     <button
                       onClick={() => setOnboardingData({
                         ...onboardingData,
@@ -3125,17 +3257,19 @@ export default function Home() {
                         foundationOption: onboardingData.foundationOption || 'opt1',
                         creditOption: null
                       })}
-                      className={`p-3.5 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-24 cursor-pointer ${
+                      className={`p-4 rounded-2xl border text-left transition-all duration-300 flex flex-col justify-between h-28 cursor-pointer ${
                         onboardingData.pathway === 'foundation'
-                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                          ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-[0_0_20px_rgba(99,102,241,0.2)]'
+                          : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                       } ${getHighlightClass('pathway-card-a')}`}
                       data-tutorial="pathway-card-a"
                     >
-                      <BookOpen className="h-4.5 w-4.5" />
+                      <div className="h-8 w-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                        <BookOpen className="h-4.5 w-4.5" />
+                      </div>
                       <div>
-                        <p className="text-xs text-slate-100 font-bold">Pathway A</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Non-Credit Foundation</p>
+                        <p className="text-xs text-white font-black">Pathway A</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Non-Credit Foundation</p>
                       </div>
                     </button>
 
@@ -3146,17 +3280,19 @@ export default function Home() {
                         creditOption: onboardingData.creditOption || 'opt1',
                         foundationOption: null
                       })}
-                      className={`p-3.5 rounded-xl border text-left transition-all duration-300 flex flex-col justify-between h-24 cursor-pointer ${
+                      className={`p-4 rounded-2xl border text-left transition-all duration-300 flex flex-col justify-between h-28 cursor-pointer ${
                         onboardingData.pathway === 'credit'
-                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                          ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-[0_0_20px_rgba(99,102,241,0.2)]'
+                          : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                       } ${getHighlightClass('pathway-card-b')}`}
                       data-tutorial="pathway-card-b"
                     >
-                      <Award className="h-4.5 w-4.5" />
+                      <div className="h-8 w-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                        <Award className="h-4.5 w-4.5" />
+                      </div>
                       <div>
-                        <p className="text-xs text-slate-100 font-bold">Pathway B</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Direct Credit Courses</p>
+                        <p className="text-xs text-white font-black">Pathway B</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Direct Credit Courses</p>
                       </div>
                     </button>
                   </div>
@@ -3164,56 +3300,83 @@ export default function Home() {
                   {/* Sub-options for Pathway A */}
                   {onboardingData.pathway === 'foundation' && (
                     <div className="space-y-3 pt-2">
-                      <label className="block text-xs font-semibold tracking-wider text-slate-400 mt-6 mb-2">Select all required non-credit courses:</label>
+                      <label className="block text-xs font-bold tracking-wider text-slate-400 mt-4 mb-2">Select all required non-credit courses:</label>
                       
-                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                      <label className={`flex items-start gap-3.5 p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
                         onboardingData.remedialEng091Checked
-                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-semibold shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                          ? 'bg-gradient-to-br from-indigo-900/25 to-blue-900/15 border-indigo-500/80 text-indigo-300 font-bold shadow-md shadow-indigo-500/10'
+                          : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                       }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialEng091Checked}
                           onChange={(e) => setOnboardingData({ ...onboardingData, remedialEng091Checked: e.target.checked })}
-                          className="mt-1 h-4 w-4 accent-indigo-500 cursor-pointer"
+                          className="sr-only"
                         />
+                        <div className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 shrink-0 mt-0.5 ${
+                          onboardingData.remedialEng091Checked
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(99,102,241,0.5)]'
+                            : 'border-white/20 bg-white/[0.04]'
+                        }`}>
+                          {onboardingData.remedialEng091Checked && (
+                            <Check className="h-3 w-3 text-white stroke-[3]" />
+                          )}
+                        </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-100">ENG091 ({COURSES.find(c => c.code === "ENG091")?.title})</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Required for students needing basic English grounding</p>
+                          <p className="text-sm font-bold text-slate-100">ENG091 ({COURSES.find(c => c.code === "ENG091")?.title})</p>
+                          <p className="text-xs text-slate-400 mt-0.5 font-medium">Required for students needing basic English grounding</p>
                         </div>
                       </label>
 
-                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                      <label className={`flex items-start gap-3.5 p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
                         onboardingData.remedialMat091Checked
-                          ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-medium shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                          ? 'bg-gradient-to-br from-indigo-900/25 to-blue-900/15 border-indigo-500/80 text-indigo-300 font-bold shadow-md shadow-indigo-500/10'
+                          : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                       }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialMat091Checked}
                           onChange={(e) => setOnboardingData({ ...onboardingData, remedialMat091Checked: e.target.checked })}
-                          className="mt-1 h-4 w-4 accent-indigo-500 cursor-pointer"
+                          className="sr-only"
                         />
+                        <div className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 shrink-0 mt-0.5 ${
+                          onboardingData.remedialMat091Checked
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(99,102,241,0.5)]'
+                            : 'border-white/20 bg-white/[0.04]'
+                        }`}>
+                          {onboardingData.remedialMat091Checked && (
+                            <Check className="h-3 w-3 text-white stroke-[3]" />
+                          )}
+                        </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-100">MAT091 ({COURSES.find(c => c.code === "MAT091")?.title})</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Basic remedial pre-calculus algebra</p>
+                          <p className="text-sm font-bold text-slate-100">MAT091 ({COURSES.find(c => c.code === "MAT091")?.title})</p>
+                          <p className="text-xs text-slate-400 mt-0.5 font-medium">Basic remedial pre-calculus algebra</p>
                         </div>
                       </label>
 
-                      <label className={`flex items-start gap-3 p-4 rounded-xl border transition-all duration-300 cursor-pointer ${
+                      <label className={`flex items-start gap-3.5 p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${
                         onboardingData.remedialMat092Checked
-                          ? 'bg-indigo-600/10 border-indigo-500 text-slate-100 font-medium shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                          : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                          ? 'bg-gradient-to-br from-indigo-900/25 to-blue-900/15 border-indigo-500/80 text-indigo-300 font-bold shadow-md shadow-indigo-500/10'
+                          : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                       }`}>
                         <input
                           type="checkbox"
                           checked={onboardingData.remedialMat092Checked}
                           onChange={(e) => setOnboardingData({ ...onboardingData, remedialMat092Checked: e.target.checked })}
-                          className="mt-1 h-4 w-4 accent-indigo-500 cursor-pointer"
+                          className="sr-only"
                         />
+                        <div className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 shrink-0 mt-0.5 ${
+                          onboardingData.remedialMat092Checked
+                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(99,102,241,0.5)]'
+                            : 'border-white/20 bg-white/[0.04]'
+                        }`}>
+                          {onboardingData.remedialMat092Checked && (
+                            <Check className="h-3 w-3 text-white stroke-[3]" />
+                          )}
+                        </div>
                         <div>
-                          <p className="text-sm font-semibold text-slate-100">MAT092 ({COURSES.find(c => c.code === "MAT092")?.title})</p>
-                          <p className="text-xs text-slate-400 mt-0.5">Intermediate remedial algebra prior to MAT110 Calculus</p>
+                          <p className="text-sm font-bold text-slate-100">MAT092 ({COURSES.find(c => c.code === "MAT092")?.title})</p>
+                          <p className="text-xs text-slate-400 mt-0.5 font-medium">Intermediate remedial algebra prior to MAT110 Calculus</p>
                         </div>
                       </label>
                     </div>
@@ -3222,7 +3385,7 @@ export default function Home() {
                   {/* Sub-options for Pathway B */}
                   {onboardingData.pathway === 'credit' && (
                     <div className="space-y-3 pt-2">
-                      <label className="block text-xs font-semibold tracking-wider text-slate-400 mt-6 mb-2">Select starting English course:</label>
+                      <label className="block text-xs font-bold tracking-wider text-slate-400 mt-4 mb-2">Select starting English course:</label>
                       
                       <button
                         onClick={() => {
@@ -3235,17 +3398,17 @@ export default function Home() {
                             engStatusPriorToRS: nextPriorStatus
                           });
                         }}
-                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                        className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                           onboardingData.creditOption === 'opt1'
-                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                            ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                            : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                         }`}
                       >
                         <div>
-                          <p className="font-semibold text-slate-100">Option 1: Started with ENG101</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Assigns ENG101 ({COURSES.find(c => c.code === "ENG101")?.title}) to Semester 1</p>
+                          <p className="font-bold text-white text-sm">Option 1: Started with ENG101</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Assigns ENG101 ({COURSES.find(c => c.code === "ENG101")?.title}) to Semester 1</p>
                         </div>
-                        {onboardingData.creditOption === 'opt1' && <Check className="h-4 w-4 text-indigo-400" />}
+                        {onboardingData.creditOption === 'opt1' && <Check className="h-5 w-5 text-indigo-400" />}
                       </button>
 
                       <button
@@ -3259,17 +3422,17 @@ export default function Home() {
                             engStatusPriorToRS: nextPriorStatus
                           });
                         }}
-                        className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                        className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                           onboardingData.creditOption === 'opt2'
-                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                            : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                            ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                            : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                         }`}
                       >
                         <div>
-                          <p className="font-semibold text-slate-100">Option 2: Started with ENG102</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">Assigns ENG102 ({COURSES.find(c => c.code === "ENG102")?.title}) to Semester 1</p>
+                          <p className="font-bold text-white text-sm">Option 2: Started with ENG102</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Assigns ENG102 ({COURSES.find(c => c.code === "ENG102")?.title}) to Semester 1</p>
                         </div>
-                        {onboardingData.creditOption === 'opt2' && <Check className="h-4 w-4 text-indigo-400" />}
+                        {onboardingData.creditOption === 'opt2' && <Check className="h-5 w-5 text-indigo-400" />}
                       </button>
                     </div>
                   )}
@@ -3284,7 +3447,7 @@ export default function Home() {
                       }
                     }}
                     disabled={!onboardingData.pathway}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98]"
                   >
                     Continue
                   </button>
@@ -3296,8 +3459,8 @@ export default function Home() {
             {wizardStep === 2 && (
               <div className="space-y-6 relative z-10">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-slate-100">RS & English Placement Engine</h2>
-                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  <h2 className="text-xl font-black tracking-tight text-white">RS & English Placement Engine</h2>
+                  <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">
                     Set up your Residential Semester. The engine will evaluate prerequisites to auto-populate the RS card.
                   </p>
                 </div>
@@ -3305,16 +3468,16 @@ export default function Home() {
                 <div className="space-y-6">
                   {/* Select RS Term */}
                   <div className="space-y-2">
-                    <label className="block text-xs font-semibold tracking-wider text-slate-400">When will you attend RS?</label>
-                    <div className="grid grid-cols-3 gap-2" data-tutorial="rs-term-select">
+                    <label className="block text-xs font-bold tracking-wider text-slate-400">When will you attend RS?</label>
+                    <div className="grid grid-cols-3 gap-2.5" data-tutorial="rs-term-select">
                       {(["3rd Semester", "4th Semester", "5th Semester"] as const).map(term => (
                         <button
                           key={term}
                           onClick={() => setOnboardingData({ ...onboardingData, rsTerm: term })}
-                          className={`p-3 rounded-xl border text-xs font-semibold text-center transition-all duration-300 cursor-pointer ${
+                          className={`p-3.5 rounded-2xl border text-xs font-bold text-center transition-all duration-300 cursor-pointer ${
                             onboardingData.rsTerm === term
-                              ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                              : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                              ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                              : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                           } ${getHighlightClass('rs-term-select')}`}
                         >
                           {term}
@@ -3325,34 +3488,44 @@ export default function Home() {
 
                   {/* Select Starting Intake */}
                   <div className="space-y-2">
-                    <label className="block text-xs font-semibold tracking-wider text-slate-400">Starting intake:</label>
+                    <label className="block text-xs font-bold tracking-wider text-slate-400">Starting intake:</label>
                     <div className="grid grid-cols-2 gap-3">
-                      <select
-                        value={onboardingData.startingTerm}
-                        onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
-                        className={`w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer ${getHighlightClass('starting-intake-select')}`}
-                        data-tutorial="starting-intake-select"
-                      >
-                        <option value="Spring">Spring</option>
-                        <option value="Summer">Summer</option>
-                        <option value="Fall">Fall</option>
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={onboardingData.startingTerm}
+                          onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
+                          className={`w-full appearance-none bg-[#0e0e14] border border-slate-800/80 text-xs pl-3.5 pr-9 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold ${getHighlightClass('starting-intake-select')}`}
+                          data-tutorial="starting-intake-select"
+                        >
+                          <option value="Spring">Spring</option>
+                          <option value="Summer">Summer</option>
+                          <option value="Fall">Fall</option>
+                        </select>
+                        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center">
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </div>
+                      </div>
                       
-                      <select
-                        value={onboardingData.startingYear}
-                        onChange={(e) => setOnboardingData({ ...onboardingData, startingYear: parseInt(e.target.value) })}
-                        className={`w-full bg-[#09090b]/90 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer ${getHighlightClass('starting-intake-select')}`}
-                      >
-                        {Array.from({ length: 11 }, (_, i) => 2020 + i).map(year => (
-                          <option key={year} value={year}>{year}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={onboardingData.startingYear}
+                          onChange={(e) => setOnboardingData({ ...onboardingData, startingYear: parseInt(e.target.value) })}
+                          className={`w-full appearance-none bg-[#0e0e14] border border-slate-800/80 text-xs pl-3.5 pr-9 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold ${getHighlightClass('starting-intake-select')}`}
+                        >
+                          {Array.from({ length: 11 }, (_, i) => 2020 + i).map(year => (
+                            <option key={year} value={year}>{year}</option>
+                          ))}
+                        </select>
+                        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 flex items-center">
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {/* Select English Prior Status */}
                   <div className="space-y-2 pt-2">
-                    <label className="block text-xs font-semibold tracking-wider text-slate-400">
+                    <label className="block text-xs font-bold tracking-wider text-slate-400">
                       English status prior to RS:
                     </label>
                     <div className="space-y-2.5" data-tutorial="english-status-select">
@@ -3361,79 +3534,79 @@ export default function Home() {
                         <>
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                            className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseA'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                                ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                                : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                             } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
-                              <p className="text-slate-100 font-semibold text-xs">Have not completed ENG102 before RS (will take ENG102 during RS)</p>
-                              <p className="text-[9px] text-indigo-400 mt-0.5">RS card will auto-assign: ENG102 as your 4th course</p>
+                              <p className="text-white font-bold text-xs">Have not completed ENG102 before RS (will take ENG102 during RS)</p>
+                              <p className="text-[10px] text-indigo-400 mt-0.5 font-medium">RS card will auto-assign: ENG102 as your 4th course</p>
                             </div>
-                            {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-4 w-4 text-indigo-400" />}
+                            {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-5 w-5 text-indigo-400 shrink-0" />}
                           </button>
 
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseD' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                            className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseD'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                                ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                                : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                             } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
-                              <p className="text-slate-100 font-semibold text-xs">Completed ENG102 before RS</p>
-                              <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
+                              <p className="text-white font-bold text-xs">Completed ENG102 before RS</p>
+                              <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">RS card will auto-assign: BU201 as your 4th course</p>
                             </div>
-                            {onboardingData.engStatusPriorToRS === 'caseD' && <Check className="h-4 w-4 text-indigo-400" />}
+                            {onboardingData.engStatusPriorToRS === 'caseD' && <Check className="h-5 w-5 text-indigo-400 shrink-0" />}
                           </button>
                         </>
                       ) : (
                         <>
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseA' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                            className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseA'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                                ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                                : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                             } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
-                              <p className="text-slate-100 font-semibold text-xs">Passed ENG101, but NOT ENG102 before RS</p>
-                              <p className="text-[9px] text-indigo-400 mt-0.5">RS card will auto-assign: ENG102 as your 4th course</p>
+                              <p className="text-white font-bold text-xs">Passed ENG101, but NOT ENG102 before RS</p>
+                              <p className="text-[10px] text-indigo-400 mt-0.5 font-medium">RS card will auto-assign: ENG102 as your 4th course</p>
                             </div>
-                            {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-4 w-4 text-indigo-400" />}
+                            {onboardingData.engStatusPriorToRS === 'caseA' && <Check className="h-5 w-5 text-indigo-400 shrink-0" />}
                           </button>
 
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseB' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                            className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseB'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                                ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                                : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                             } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
-                              <p className="text-slate-100 font-semibold text-xs">Passed ENG101 and ENG102 before RS</p>
-                              <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
+                              <p className="text-white font-bold text-xs">Passed ENG101 and ENG102 before RS</p>
+                              <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">RS card will auto-assign: BU201 as your 4th course</p>
                             </div>
-                            {onboardingData.engStatusPriorToRS === 'caseB' && <Check className="h-4 w-4 text-indigo-400" />}
+                            {onboardingData.engStatusPriorToRS === 'caseB' && <Check className="h-5 w-5 text-indigo-400 shrink-0" />}
                           </button>
 
                           <button
                             onClick={() => setOnboardingData({ ...onboardingData, engStatusPriorToRS: 'caseC' })}
-                            className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
+                            className={`w-full p-4 rounded-2xl border text-left text-xs transition-all duration-300 flex items-center justify-between cursor-pointer ${
                               onboardingData.engStatusPriorToRS === 'caseC'
-                                ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400 font-bold shadow-[0_0_15px_rgba(99,102,241,0.15)]'
-                                : 'bg-zinc-950/30 border-slate-800 text-slate-400 hover:border-slate-800/80 hover:text-slate-100 hover:bg-slate-900/10'
+                                ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
+                                : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
                             } ${getHighlightClass('english-status-select')}`}
                           >
                             <div>
-                              <p className="text-slate-100 font-semibold text-xs">Failed ENG101 before RS</p>
-                              <p className="text-[9px] text-emerald-400 mt-0.5">RS card will auto-assign: BU201 as your 4th course</p>
+                              <p className="text-white font-bold text-xs">Failed ENG101 before RS</p>
+                              <p className="text-[10px] text-emerald-400 mt-0.5 font-medium">RS card will auto-assign: BU201 as your 4th course</p>
                             </div>
-                            {onboardingData.engStatusPriorToRS === 'caseC' && <Check className="h-4 w-4 text-indigo-400" />}
+                            {onboardingData.engStatusPriorToRS === 'caseC' && <Check className="h-5 w-5 text-indigo-400 shrink-0" />}
                           </button>
                         </>
                       )}
@@ -3444,7 +3617,7 @@ export default function Home() {
                 <div className="flex items-center justify-between pt-2">
                   <button
                     onClick={() => setWizardStep(1)}
-                    className="text-slate-400 hover:text-slate-200 text-sm font-semibold transition cursor-pointer"
+                    className="text-slate-400 hover:text-slate-200 text-xs font-bold transition cursor-pointer px-4 py-2 rounded-xl"
                   >
                     Back
                   </button>
@@ -3458,7 +3631,7 @@ export default function Home() {
                       }
                     }}
                     disabled={!onboardingData.engStatusPriorToRS}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20"
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98]"
                   >
                     Next Step
                   </button>
@@ -3470,23 +3643,23 @@ export default function Home() {
             {wizardStep === 3 && (
               <div className="space-y-6 relative z-10">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-slate-100">Generate Your Study Plan</h2>
-                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  <h2 className="text-xl font-black tracking-tight text-white">Generate Your Study Plan</h2>
+                  <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">
                     Review your generated curriculum layout summary:
                   </p>
                 </div>
 
-                <div className="bg-zinc-950 border border-slate-800 p-5 rounded-xl space-y-1 text-xs shadow-md">
+                <div className="bg-[#050508] border border-slate-800/80 p-5 rounded-2xl space-y-1 text-xs shadow-inner">
                   <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
                     <span className="text-slate-400 font-medium">Starting Pathway:</span>
-                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%] capitalize">
+                    <span className="text-right text-xs font-bold text-slate-200 break-words max-w-[65%] capitalize">
                       {onboardingData.pathway === 'foundation' ? "Non-Credit Foundation" : "Direct Credit Course"}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
                     <span className="text-slate-400 font-medium">1st Semester Course:</span>
-                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%]">
+                    <span className="text-right text-xs font-bold text-indigo-300 break-words max-w-[65%]">
                       {onboardingData.pathway === 'foundation' 
                         ? ([
                             onboardingData.remedialEng091Checked ? "ENG091" : null,
@@ -3500,14 +3673,14 @@ export default function Home() {
 
                   <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
                     <span className="text-slate-400 font-medium">RS Semester Card:</span>
-                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%]">
+                    <span className="text-right text-xs font-bold text-emerald-400 break-words max-w-[65%]">
                       {onboardingData.rsTerm}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center py-2.5 border-b border-slate-800/60 last:border-0">
                     <span className="text-slate-400 font-medium">RS Course Population:</span>
-                    <span className="text-right text-sm font-medium text-slate-300 break-words max-w-[65%]">
+                    <span className="text-right text-xs font-bold text-slate-200 break-words max-w-[65%]">
                       {onboardingData.engStatusPriorToRS === 'caseA' ? "EMB101 + HUM103 + BNG103 + ENG102" : "EMB101 + HUM103 + BNG103 + BU201"}
                     </span>
                   </div>
@@ -3516,7 +3689,7 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => setWizardStep(2)}
-                    className="text-slate-400 hover:text-slate-200 text-sm font-semibold transition cursor-pointer"
+                    className="text-slate-400 hover:text-slate-200 text-xs font-bold transition cursor-pointer px-4 py-2 rounded-xl"
                   >
                     Back
                   </button>
@@ -3527,7 +3700,7 @@ export default function Home() {
                         handleTutorialStepChange(5);
                       }
                     }}
-                    className={`px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-semibold rounded-xl shadow-md transition duration-200 cursor-pointer text-sm shadow-indigo-600/10 hover:shadow-indigo-600/20 ${getHighlightClass('generate-plan-btn')}`}
+                    className={`px-7 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold rounded-2xl shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98] ${getHighlightClass('generate-plan-btn')}`}
                     data-tutorial="generate-plan-btn"
                   >
                     Generate Plan
@@ -3551,25 +3724,29 @@ export default function Home() {
             <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-32px)] flex flex-col gap-6 lg:overflow-y-auto pr-4 custom-scrollbar">
               
               {/* 1. Degree Standing Card */}
-              <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
-                <div className="absolute top-0 right-0 h-32 w-32 bg-indigo-500/[0.02] rounded-full blur-2xl pointer-events-none" />
+              <div className="bg-[#08080d]/90 border border-slate-800/80 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
+                <div className="absolute top-0 right-0 h-32 w-32 bg-blue-500/[0.03] rounded-full blur-2xl pointer-events-none" />
                 
-                <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2 mb-4">
-                  <BadgeCheck className="h-4 w-4" />
-                  Degree Standing
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xs font-bold text-blue-400 tracking-wider uppercase flex items-center gap-2">
+                    <BadgeCheck className="h-4 w-4" />
+                    Degree Standing
+                  </h2>
+                  <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full">
+                    {Math.round((cumulativeStats.completedCredits / 136) * 100)}%
+                  </span>
+                </div>
                 
-                <div className="space-y-4">
-                  {/* Credit Progress */}
+                <div className="space-y-3">
                   <div>
-                    <div className="flex justify-between text-[11px] mb-1.5">
+                    <div className="flex justify-between items-baseline text-xs mb-2">
                       <span className="text-slate-400 font-medium">Completed Credits</span>
-                      <span className="text-slate-100 font-extrabold">{cumulativeStats.completedCredits} / 136 Cr</span>
+                      <span className="text-slate-100 font-extrabold text-sm">{cumulativeStats.completedCredits} <span className="text-slate-400 font-normal text-xs">/ 136 Cr</span></span>
                     </div>
-                    <div className="h-3 w-full bg-zinc-900 border border-slate-800 rounded-full overflow-hidden p-0.5">
+                    <div className="h-3 w-full bg-[#040406] border border-slate-800/80 rounded-full overflow-hidden p-0.5 shadow-inner">
                       <div 
                         style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
-                        className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-indigo-400 rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]"
                       />
                     </div>
                   </div>
@@ -3578,27 +3755,27 @@ export default function Home() {
 
                 {/* 2. Middle Section: Cumulative CGPA display, Probation Badge, and the Target CGPA Solver widget */}
                 {mode === 'gpa' && (
-                  <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
+                  <div className="bg-[#08080d]/90 border border-slate-800/80 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
                     <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
                       <Gauge className="h-4 w-4" />
                       GPA Dashboard
                     </h2>
 
                     {/* Cumulative CGPA Box */}
-                    <div className="bg-zinc-900/15 border border-slate-800/40 p-4 rounded-xl flex items-center justify-between shadow-[0_0_15px_rgba(99,102,241,0.03)]">
+                    <div className="bg-[#0e0e14]/70 border border-slate-800/80 p-5 rounded-2xl flex items-center justify-between shadow-inner">
                       <div>
                         <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Cumulative CGPA</p>
-                        <p className="text-3xl lg:text-4xl font-extrabold text-slate-100 mt-1 tracking-tight">
+                        <p className="text-3xl lg:text-4xl font-black text-white mt-1 tracking-tight">
                           {cumulativeStats.cgpa.toFixed(2)}
                         </p>
                       </div>
                       <div className="pt-0.5">
                         {cumulativeStats.cgpa >= 2.0 ? (
-                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[10px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-450 px-3 py-1 rounded-full uppercase tracking-wider">
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-[0_0_12px_rgba(16,185,129,0.15)]">
                             Good Standing
                           </span>
                         ) : (
-                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[10px] font-extrabold bg-rose-500/10 border border-rose-500/20 text-rose-450 px-3 py-1 rounded-full uppercase tracking-wider">
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-400 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-[0_0_12px_rgba(244,63,94,0.15)]">
                             Probation Range
                           </span>
                         )}
@@ -3607,12 +3784,12 @@ export default function Home() {
 
                     {/* Target CGPA Solver Widget */}
                     <div 
-                      className={`bg-zinc-900/40 border border-slate-800/70 hover:border-slate-700/80 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4 transition-all ${getHighlightClass('gpa-solver-card')}`}
+                      className={`bg-[#0e0e14]/60 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-4 transition-all ${getHighlightClass('gpa-solver-card')}`}
                       data-tutorial="gpa-solver-card"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
+                          <div className="h-10 w-10 rounded-2xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
                             <Crosshair className="h-5 w-5" />
                           </div>
                           <div className="min-w-0">
@@ -3625,7 +3802,7 @@ export default function Home() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 bg-zinc-950/80 border border-slate-800 focus-within:border-indigo-500/50 rounded-xl px-3 py-1.5 shadow-inner transition-colors shrink-0">
+                        <div className="flex items-center gap-1.5 bg-[#050508] border border-slate-800 focus-within:border-indigo-500/50 rounded-xl px-3 py-1.5 shadow-inner transition-colors shrink-0">
                           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Goal:</span>
                           <input
                             type="number"
@@ -3641,7 +3818,7 @@ export default function Home() {
 
                       {targetSolverResult.isAchieved ? (
                         <div className="flex items-center gap-3 bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-3.5 text-emerald-300">
-                          <div className="h-9 w-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                          <div className="h-9 w-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
                             <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                           </div>
                           <div className="min-w-0 text-xs">
@@ -3665,7 +3842,7 @@ export default function Home() {
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-2.5">
                             {/* Required GPA Stat Card */}
-                            <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                            <div className="bg-[#050508]/80 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
                               <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
                                 Required GPA / Sem
                               </span>
@@ -3673,14 +3850,14 @@ export default function Home() {
                                 <span className="text-xl font-bold font-mono text-white tracking-tight">
                                   {Math.max(0, targetSolverResult.requiredGpa).toFixed(2)}
                                 </span>
-                                <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-1.5 py-0.5 rounded">
+                                <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 rounded-lg">
                                   {targetSolverResult.letterEquivalent}
                                 </span>
                               </div>
                             </div>
 
                             {/* Remaining Credits Stat Card */}
-                            <div className="bg-zinc-950/60 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
+                            <div className="bg-[#050508]/80 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
                               <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
                                 Remaining Credits
                               </span>
@@ -3696,7 +3873,7 @@ export default function Home() {
                           </div>
 
                           {/* Summary Row */}
-                          <div className="flex items-center gap-2.5 bg-slate-950/40 border border-slate-800/60 rounded-xl px-3 py-2 text-[11px] text-slate-300 leading-relaxed">
+                          <div className="flex items-center gap-2.5 bg-[#050508]/60 border border-slate-800/60 rounded-xl px-3 py-2 text-[11px] text-slate-300 leading-relaxed">
                             <ArrowUpRight className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
                             <span>
                               Maintain an average of <strong className="text-indigo-300 font-semibold">{Math.max(0, targetSolverResult.requiredGpa).toFixed(2)} ({targetSolverResult.letterEquivalent})</strong> over remaining credits to reach your <strong className="text-white font-semibold">{targetCgpa}</strong> goal.
@@ -3708,12 +3885,12 @@ export default function Home() {
 
                     {/* Repeat ROI Analyzer Sidebar Widget */}
                     <div 
-                      className={`bg-zinc-900/40 border border-slate-800/70 hover:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-lg transition-all ${getHighlightClass('roi-analyzer')}`}
+                      className={`bg-[#0e0e14]/60 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg transition-all ${getHighlightClass('roi-analyzer')}`}
                       data-tutorial="roi-analyzer"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
+                          <div className="h-10 w-10 rounded-2xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
                             <Repeat className="h-5 w-5" />
                           </div>
                           <div className="min-w-0">
@@ -3729,7 +3906,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setShowRoiModal(true)}
-                          className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-slate-700/80 hover:border-indigo-500/50 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] shrink-0 cursor-pointer"
+                          className="px-3.5 py-2 bg-[#121218] hover:bg-[#161622] border border-slate-700/80 hover:border-indigo-500/50 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] shrink-0 cursor-pointer"
                         >
                           <span>{roiAnalysis.candidates.length} courses</span>
                           <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
@@ -3740,103 +3917,106 @@ export default function Home() {
                 )}
 
                 {/* 3. Bottom Section: Category Requirements */}
-                <div className="bg-zinc-950/40 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
+                <div className="bg-[#08080d]/90 border border-slate-800/80 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
                   <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
                     <Layers className="h-4 w-4" />
                     Category Requirements
                   </h2>
 
                   <div className="space-y-3.5">
-                    {/* 1. Mandatory Core */}
+                    {/* 1. Mandatory Core - Blue Accent Card */}
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('core')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-core')}`}
+                      className={`w-full text-left cursor-pointer bg-blue-950/15 border border-blue-500/20 hover:bg-blue-950/25 hover:border-blue-500/40 transition-all rounded-2xl p-4 flex flex-col gap-2.5 focus:outline-none group shadow-sm ${getHighlightClass('category-core')}`}
                       data-tutorial="category-core"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-350 font-semibold">Program Core (Mandatory)</span>
-                        <span className="text-slate-400 font-extrabold">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
+                      <div className="w-full flex justify-between items-center text-xs">
+                        <span className="text-blue-200 font-semibold group-hover:text-blue-100 transition-colors">Program Core (Mandatory)</span>
+                        <span className="text-blue-300 font-extrabold text-[11px] bg-blue-500/15 border border-blue-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2.5 w-full bg-[#040406] border border-blue-500/20 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.coreCompleted / curriculumProgress.coreTotal) * 100}%` }}
-                          className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
                         />
                       </div>
                     </button>
 
-                    {/* Capstone Thesis */}
+                    {/* Capstone Thesis - Purple Accent Card */}
                     <div
-                      className={`w-full bg-zinc-900/15 border border-slate-800/40 rounded-xl p-3.5 flex flex-col gap-2 ${getHighlightClass('category-thesis')}`}
+                      className={`w-full bg-purple-950/15 border border-purple-500/20 hover:border-purple-500/40 rounded-2xl p-4 flex flex-col gap-2.5 transition-all shadow-sm ${getHighlightClass('category-thesis')}`}
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-355 font-semibold">Capstone Thesis (CSE400)</span>
-                        <span className="text-slate-400 font-extrabold">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
+                      <div className="w-full flex justify-between items-center text-xs">
+                        <span className="text-purple-200 font-semibold">Capstone Thesis (CSE400)</span>
+                        <span className="text-purple-300 font-extrabold text-[11px] bg-purple-500/15 border border-purple-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2.5 w-full bg-[#040406] border border-purple-500/20 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.thesisCompleted / curriculumProgress.thesisTotal) * 100}%` }}
-                          className="h-full bg-indigo-500/80 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]"
                         />
                       </div>
                     </div>
 
-                    {/* 2. School Core (Math & Sciences) */}
+                    {/* 2. School Core (Math & Sciences) - Cyan Accent Card */}
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('schoolCore')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-school')}`}
+                      className={`w-full text-left cursor-pointer bg-cyan-950/15 border border-cyan-500/20 hover:bg-cyan-950/25 hover:border-cyan-500/40 transition-all rounded-2xl p-4 flex flex-col gap-2.5 focus:outline-none group shadow-sm ${getHighlightClass('category-school')}`}
+                      data-tutorial="category-school"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-355 font-semibold">School Core (Math &amp; Sciences)</span>
-                        <span className="text-slate-400 font-extrabold">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
+                      <div className="w-full flex justify-between items-center text-xs">
+                        <span className="text-cyan-200 font-semibold group-hover:text-cyan-100 transition-colors">School Core (Math &amp; Sciences)</span>
+                        <span className="text-cyan-300 font-extrabold text-[11px] bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2.5 w-full bg-[#040406] border border-cyan-500/20 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.schoolCoreCompleted / curriculumProgress.schoolCoreTotal) * 100}%` }}
-                          className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(6,182,212,0.5)]"
                         />
                       </div>
                     </button>
 
-                    {/* 3. CSE Major Electives */}
+                    {/* 3. CSE Major Electives - Amber Accent Card */}
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('electives')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-electives')}`}
+                      className={`w-full text-left cursor-pointer bg-amber-950/15 border border-amber-500/20 hover:bg-amber-950/25 hover:border-amber-500/40 transition-all rounded-2xl p-4 flex flex-col gap-2.5 focus:outline-none group shadow-sm ${getHighlightClass('category-electives')}`}
+                      data-tutorial="category-electives"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-zinc-355 font-semibold">CSE Major Electives</span>
-                        <span className="text-slate-400 font-extrabold">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
+                      <div className="w-full flex justify-between items-center text-xs">
+                        <span className="text-amber-200 font-semibold group-hover:text-amber-100 transition-colors">CSE Major Electives</span>
+                        <span className="text-amber-300 font-extrabold text-[11px] bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
                       </div>
-                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2.5 w-full bg-[#040406] border border-amber-500/20 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.electiveCompleted / curriculumProgress.electiveTotal) * 100}%` }}
-                          className="h-full bg-indigo-400 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
                         />
                       </div>
                     </button>
                   </div>
 
                   {/* 4. GenEd Streams */}
-                  <div className="pt-4 border-t border-slate-800/60 space-y-3">
+                  <div className="pt-4 border-t border-slate-800/80 space-y-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">GenEd Streams Progress (39 Cr Total)</p>
                     
                     {/* Stream 1: Writing */}
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream1')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
+                      className={`w-full text-left cursor-pointer bg-rose-950/10 border border-rose-500/15 hover:bg-rose-950/20 hover:border-rose-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
+                      data-tutorial="category-gened"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-slate-400">GenEd Stream 1 (Writing Comprehension)</span>
-                        <span className="text-slate-400 font-extrabold">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
+                      <div className="w-full flex justify-between items-center text-[11px]">
+                        <span className="text-rose-200/90 group-hover:text-rose-100 font-medium">GenEd Stream 1 (Writing Comprehension)</span>
+                        <span className="text-rose-300 font-extrabold text-[10px] bg-rose-500/15 border border-rose-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-[#040406] border border-rose-500/15 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.stream1Completed / curriculumProgress.stream1Total) * 100}%` }}
-                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3845,16 +4025,17 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream2')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
+                      className={`w-full text-left cursor-pointer bg-indigo-950/10 border border-indigo-500/15 hover:bg-indigo-950/20 hover:border-indigo-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
+                      data-tutorial="category-gened"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-slate-400">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
-                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream2Completed} / {curriculumProgress.stream2Total} Cr</span>
+                      <div className="w-full flex justify-between items-center text-[11px]">
+                        <span className="text-indigo-200/90 group-hover:text-indigo-100 font-medium">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
+                        <span className="text-indigo-300 font-extrabold text-[10px] bg-indigo-500/15 border border-indigo-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream2Completed} / {curriculumProgress.stream2Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-[#040406] border border-indigo-500/15 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.stream2Completed / curriculumProgress.stream2Total) * 100}%` }}
-                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3863,16 +4044,17 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream3')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
+                      className={`w-full text-left cursor-pointer bg-emerald-950/10 border border-emerald-500/15 hover:bg-emerald-950/20 hover:border-emerald-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
+                      data-tutorial="category-gened"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-slate-400">GenEd Stream 3 (Arts &amp; Humanities)</span>
-                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream3Completed} / {curriculumProgress.stream3Total} Cr</span>
+                      <div className="w-full flex justify-between items-center text-[11px]">
+                        <span className="text-emerald-200/90 group-hover:text-emerald-100 font-medium">GenEd Stream 3 (Arts &amp; Humanities)</span>
+                        <span className="text-emerald-300 font-extrabold text-[10px] bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream3Completed} / {curriculumProgress.stream3Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-[#040406] border border-emerald-500/15 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.stream3Completed / curriculumProgress.stream3Total) * 100}%` }}
-                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3881,16 +4063,17 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream4')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
+                      className={`w-full text-left cursor-pointer bg-violet-950/10 border border-violet-500/15 hover:bg-violet-950/20 hover:border-violet-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
+                      data-tutorial="category-gened"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-slate-400">GenEd Stream 4 (Social Sciences)</span>
-                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream4Completed} / {curriculumProgress.stream4Total} Cr</span>
+                      <div className="w-full flex justify-between items-center text-[11px]">
+                        <span className="text-violet-200/90 group-hover:text-violet-100 font-medium">GenEd Stream 4 (Social Sciences)</span>
+                        <span className="text-violet-300 font-extrabold text-[10px] bg-violet-500/15 border border-violet-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream4Completed} / {curriculumProgress.stream4Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-[#040406] border border-violet-500/15 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.stream4Completed / curriculumProgress.stream4Total) * 100}%` }}
-                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3899,16 +4082,17 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('stream5')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
+                      className={`w-full text-left cursor-pointer bg-teal-950/10 border border-teal-500/15 hover:bg-teal-950/20 hover:border-teal-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
+                      data-tutorial="category-gened"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-slate-400">GenEd Stream 5 (Communities / CST)</span>
-                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.stream5Completed} / {curriculumProgress.stream5Total} Cr</span>
+                      <div className="w-full flex justify-between items-center text-[11px]">
+                        <span className="text-teal-200/90 group-hover:text-teal-100 font-medium">GenEd Stream 5 (Communities / CST)</span>
+                        <span className="text-teal-300 font-extrabold text-[10px] bg-teal-500/15 border border-teal-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream5Completed} / {curriculumProgress.stream5Total} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-[#040406] border border-teal-500/15 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.stream5Completed / curriculumProgress.stream5Total) * 100}%` }}
-                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3917,16 +4101,17 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setActiveCategorySelectorKey('freeGenEd')}
-                      className={`w-full text-left cursor-pointer bg-zinc-900/15 border border-slate-800/40 hover:bg-zinc-900/30 hover:border-slate-800/40 transition-all rounded-xl p-3.5 flex flex-col gap-2 focus:outline-none ${getHighlightClass('category-gened')}`}
+                      className={`w-full text-left cursor-pointer bg-slate-900/30 border border-slate-800 hover:bg-slate-900/50 hover:border-slate-700 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
+                      data-tutorial="category-gened"
                     >
-                      <div className="w-full flex justify-between text-[11px]">
-                        <span className="text-slate-400">GenEd Electives (Free Choice)</span>
-                        <span className="text-zinc-555 font-extrabold">{curriculumProgress.freeGenEdCredits} / {curriculumProgress.freeGenEdTotal} Cr</span>
+                      <div className="w-full flex justify-between items-center text-[11px]">
+                        <span className="text-slate-300 group-hover:text-white font-medium">GenEd Electives (Free Choice)</span>
+                        <span className="text-slate-300 font-extrabold text-[10px] bg-slate-800/80 border border-slate-700 px-2 py-0.5 rounded-full">{curriculumProgress.freeGenEdCredits} / {curriculumProgress.freeGenEdTotal} Cr</span>
                       </div>
-                      <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div className="h-2 w-full bg-[#040406] border border-slate-800 rounded-full overflow-hidden p-0.5">
                         <div 
                           style={{ width: `${(curriculumProgress.freeGenEdCredits / curriculumProgress.freeGenEdTotal) * 100}%` }}
-                          className="h-full bg-indigo-500/70 rounded-full transition-all duration-300"
+                          className="h-full bg-gradient-to-r from-slate-500 to-indigo-500 rounded-full transition-all duration-300"
                         />
                       </div>
                     </button>
@@ -3938,41 +4123,45 @@ export default function Home() {
           <main className="flex-1 w-full min-w-0 max-w-full lg:overflow-y-auto pr-0 lg:pr-4 custom-scrollbar space-y-6 pb-20">
             
             {/* Semester timelines header */}
-            <div className="grid grid-cols-3 items-center border-b border-slate-800 pb-2">
+            <div className="grid grid-cols-3 items-center border-b border-slate-800/80 pb-3">
               {/* Left Column: Title */}
               <div className="flex justify-start">
-                <h2 className="text-base font-bold tracking-tight text-slate-100">Semester Planner</h2>
+                <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">
+                  <span>Semester Planner</span>
+                </h2>
               </div>
 
               {/* Center Column: View Switcher Toggle */}
               <div className="flex justify-center">
                 <div 
-                  className={`flex items-center bg-zinc-950 border border-slate-800 rounded-lg p-0.5 shadow-inner ${getHighlightClass('layout-toggles')}`}
+                  className={`flex items-center bg-[#050508] border border-slate-800/90 rounded-2xl p-1 shadow-inner ${getHighlightClass('layout-toggles')}`}
                   data-tutorial="layout-toggles"
                 >
                   <button
                     type="button"
                     onClick={() => handleToggleViewMode("list")}
                     title="List Feed"
-                    className={`inline-flex items-center px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       currentLayout === "list"
-                        ? "bg-indigo-600 text-slate-100 shadow-sm"
-                        : "text-slate-400 hover:text-slate-100"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25"
+                        : "text-slate-400 hover:text-white"
                     }`}
                   >
                     <List className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">List</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleToggleViewMode("kanban")}
                     title="Kanban Board"
-                    className={`inline-flex items-center px-2 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       currentLayout === "kanban"
-                        ? "bg-indigo-600 text-slate-100 shadow-sm"
-                        : "text-slate-400 hover:text-slate-100"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25"
+                        : "text-slate-400 hover:text-white"
                     }`}
                   >
                     <Columns className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Board</span>
                   </button>
                 </div>
               </div>
@@ -3982,26 +4171,22 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleToggleAllCollapse}
-                  className="bg-zinc-900/60 border border-slate-800/80 hover:bg-indigo-500/10 hover:border-slate-800 text-slate-350 hover:text-indigo-400 p-2 rounded-xl transition flex items-center justify-center h-8 w-8 shrink-0 cursor-pointer"
+                  className="bg-[#08080d] border border-slate-800/80 hover:border-slate-700/80 text-slate-300 hover:text-white p-2 rounded-2xl transition flex items-center justify-center h-9 w-9 shrink-0 cursor-pointer shadow-sm"
                   title={isAnyExpanded ? "Collapse All" : "Expand All"}
                 >
                   {isAnyExpanded ? (
                     <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      {/* 3 List lines */}
                       <line x1="3" y1="6" x2="13" y2="6" />
                       <line x1="3" y1="12" x2="13" y2="12" />
                       <line x1="3" y1="18" x2="13" y2="18" />
-                      {/* Arrows pointing inward */}
                       <path d="M18 4V10M18 10L15 7M18 10L21 7" />
                       <path d="M18 20V14M18 14L15 17M18 14L21 17" />
                     </svg>
                   ) : (
                     <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      {/* 3 List lines */}
                       <line x1="3" y1="6" x2="13" y2="6" />
                       <line x1="3" y1="12" x2="13" y2="12" />
                       <line x1="3" y1="18" x2="13" y2="18" />
-                      {/* Arrows pointing outward */}
                       <path d="M18 10V4M18 4L15 7M18 4L21 7" />
                       <path d="M18 14V20M18 20L15 17M18 20L21 17" />
                     </svg>
@@ -4010,7 +4195,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={handleAddSemester}
-                  className="flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 text-slate-100 rounded-xl shadow-md transition whitespace-nowrap h-8 w-8 shrink-0 cursor-pointer"
+                  className="flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl shadow-lg shadow-blue-600/25 transition whitespace-nowrap h-9 w-9 shrink-0 cursor-pointer"
                   title="Add New Semester"
                 >
                   <Plus className="h-4.5 w-4.5 shrink-0 stroke-[2.2]" />
@@ -4021,7 +4206,7 @@ export default function Home() {
             {/* List of Semester Cards */}
             <div className={
               currentLayout === 'kanban' 
-                ? "flex flex-row gap-4 sm:gap-6 overflow-x-auto pt-8 pb-5 px-1 sm:px-3 items-stretch snap-x max-w-full min-w-0 custom-scrollbar scale-y-[-1]" 
+                ? "flex flex-row gap-4 sm:gap-6 overflow-x-auto pt-8 pb-5 px-1 sm:px-3 items-end snap-x max-w-full min-w-0 custom-scrollbar scale-y-[-1]" 
                 : "space-y-6"
             }>
               {simulatedSemesters.map((sem, semIdx) => {
@@ -4046,45 +4231,151 @@ export default function Home() {
                     onDragLeave={() => setDragOverSemesterId(null)}
                     className={`${
                       currentLayout === 'kanban' 
-                        ? `w-[84vw] sm:w-[340px] min-w-[280px] max-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] ${sem.isCollapsed ? 'self-start' : ''}` 
+                        ? `w-[84vw] sm:w-[340px] min-w-[280px] max-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] self-end` 
                         : ""
-                    } border rounded-xl overflow-visible shadow-xl backdrop-blur-md hover:border-slate-700/80 transition-all duration-300 relative ${
+                    } border rounded-3xl overflow-visible shadow-xl backdrop-blur-md hover:border-white/[0.12] transition-all duration-300 relative ${
                       draggingCourseCode && dragOverSemesterId === sem.id 
-                        ? "border-dashed border-2 border-indigo-500 bg-indigo-500/5 shadow-[0_0_20px_rgba(99,102,241,0.15)]" 
+                        ? "border-dashed border-2 border-indigo-500 bg-indigo-500/10 shadow-[0_0_30px_rgba(99,102,241,0.2)]" 
                         : sem.isRS 
-                          ? "border-indigo-500/25 bg-indigo-950/10 shadow-[0_0_15px_rgba(99,102,241,0.02)]" 
-                          : "border-slate-800/80 bg-zinc-950/40"
+                          ? "border-indigo-500/30 bg-[#0a0b12]/95 shadow-[0_0_20px_rgba(99,102,241,0.06)]" 
+                          : "border-white/[0.08] bg-[#07070b]/95"
                     }`}
                   >
-                    <div className="absolute top-0 right-0 h-28 w-28 bg-indigo-500/[0.015] rounded-full blur-2xl pointer-events-none" />
-                                  {/* Semester Card Header */}
-                    <div className={`bg-white/[0.02] px-4 py-4 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl ${sem.isCollapsed ? "rounded-b-2xl" : "border-b border-slate-800/40"}`}>
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <button
-                          onClick={() => handleToggleSemesterAllCompleted(sem.id)}
-                          title="Toggle all courses in semester"
-                          className={`h-4.5 w-4.5 rounded-full transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
-                            isAllCompleted
-                              ? 'shadow-[0_0_10px_rgba(59,130,246,0.7)]'
-                              : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
-                          }`}
-                        >
-                          {isAllCompleted ? (
-                            <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                              <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                              </svg>
+                    <div className="absolute top-0 right-0 h-28 w-28 bg-indigo-500/[0.02] rounded-full blur-2xl pointer-events-none" />
+                    {/* Semester Card Header */}
+                    {sem.isCollapsed ? (
+                      /* Collapsed Compact State */
+                      <div className="bg-white/[0.02] p-3.5 rounded-3xl flex items-center justify-between gap-2.5 transition-all">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <button
+                            onClick={() => handleToggleSemesterAllCompleted(sem.id)}
+                            title={isAllCompleted ? "Mark all incomplete" : "Mark all completed"}
+                            className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                              isAllCompleted
+                                ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_10px_rgba(59,130,246,0.6)]'
+                                : 'border-white/20 bg-white/[0.03] hover:border-white/40'
+                            }`}
+                          >
+                            {isAllCompleted && (
+                              <Check className="h-3 w-3 text-white stroke-[3]" />
+                            )}
+                          </button>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h3 className="font-black text-sm text-white tracking-tight truncate">
+                                {`Semester ${semIdx + 1}`}
+                              </h3>
+                              <span className="text-[11px] text-slate-400 font-semibold font-mono">
+                                ({sem.term || intake?.term || 'Spring'} {sem.year || intake?.year || 2025})
+                              </span>
+                              {sem.isRS && (
+                                <span className="text-[9px] font-extrabold bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                                  RS
+                                </span>
+                              )}
                             </div>
-                          ) : null}
-                        </button>
-                        <h3 className="font-bold text-sm text-slate-100 tracking-tight flex flex-wrap items-center gap-2">
-                          <span>{`Semester ${semIdx + 1}`}</span>
-                          <span className="text-zinc-700 font-normal">|</span>
-                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                              <span><strong className="text-white font-mono">{stats?.credits ?? 0}</strong> Credits</span>
+                              {mode === 'gpa' && stats?.gpa != null && (
+                                <>
+                                  <span className="text-slate-600">•</span>
+                                  <span className="text-indigo-300 font-bold font-mono">GPA {stats.gpa.toFixed(2)}</span>
+                                </>
+                              )}
+                              <span className="text-slate-600">•</span>
+                              <span>{sem.courses.length} course{sem.courses.length !== 1 ? 's' : ''}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right: Expand & Delete */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const updated = semesters.map(s => {
+                                if (s.id === sem.id) {
+                                  return { ...s, isCollapsed: false };
+                                }
+                                return s;
+                              });
+                              updateSemesters(updated);
+                            }}
+                            className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition cursor-pointer"
+                            title="Expand Semester"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteSemester(sem.id)}
+                            className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer"
+                            title="Delete Semester"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Expanded State Header */
+                      <div className="bg-white/[0.02] p-4 rounded-t-3xl border-b border-white/[0.06] space-y-3 transition-all">
+                        {/* Row 1: Checkbox + Title on left; Minimize + Trash on right */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <button
+                              onClick={() => handleToggleSemesterAllCompleted(sem.id)}
+                              title={isAllCompleted ? "Mark all incomplete" : "Mark all completed"}
+                              className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                isAllCompleted
+                                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_10px_rgba(59,130,246,0.6)]'
+                                  : 'border-white/20 bg-white/[0.03] hover:border-white/40'
+                              }`}
+                            >
+                              {isAllCompleted && (
+                                <Check className="h-3 w-3 text-white stroke-[3]" />
+                              )}
+                            </button>
+                            <h3 className="font-black text-sm text-white tracking-tight truncate">
+                              {`Semester ${semIdx + 1}`}
+                            </h3>
+                          </div>
+
+                          {/* Top Right Action Group: Minimize & Delete */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const updated = semesters.map(s => {
+                                  if (s.id === sem.id) {
+                                    return { ...s, isCollapsed: true };
+                                  }
+                                  return s;
+                                });
+                                updateSemesters(updated);
+                              }}
+                              className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition cursor-pointer"
+                              title="Minimize Semester"
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteSemester(sem.id)}
+                              className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer"
+                              title="Delete Semester"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Intake Selectors on left; Add Course Button on right */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <select
                               value={sem.term || intake?.term || 'Spring'}
                               onChange={(e) => handleOverrideIntake(sem.id, e.target.value as any, sem.year || intake?.year || onboardingData.startingYear)}
-                              className="bg-zinc-900/40 border border-slate-800/40 hover:border-slate-800/60 text-xs text-slate-100 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-purple-500 font-semibold transition"
+                              className="bg-[#08080d] border border-white/[0.1] hover:border-indigo-400/40 text-[11px] text-slate-200 rounded-xl px-2.5 py-1 outline-none cursor-pointer focus:border-indigo-400 font-semibold transition shadow-inner"
                             >
                               <option value="Spring">Spring</option>
                               <option value="Summer">Summer</option>
@@ -4093,78 +4384,61 @@ export default function Home() {
                             <select
                               value={sem.year || intake?.year || 2025}
                               onChange={(e) => handleOverrideIntake(sem.id, sem.term || intake?.term || 'Spring', parseInt(e.target.value))}
-                              className="bg-zinc-900/40 border border-slate-800/40 hover:border-slate-800/60 text-xs text-slate-100 rounded-xl px-3 py-2 outline-none cursor-pointer focus:border-purple-500 font-semibold transition"
+                              className="bg-[#08080d] border border-white/[0.1] hover:border-indigo-400/40 text-[11px] text-slate-200 rounded-xl px-2.5 py-1 outline-none cursor-pointer focus:border-indigo-400 font-semibold transition shadow-inner"
                             >
                               {Array.from({ length: 101 }, (_, i) => 2001 + i).map(year => (
                                 <option key={year} value={year}>{year}</option>
                               ))}
                             </select>
                           </div>
-                        </h3>
-                        {sem.isRS ? (
-                          <span className="text-[9px] font-bold bg-indigo-500/10 border border-slate-800 text-indigo-400 px-2 py-0.5 rounded-md tracking-wider uppercase select-none">
-                            RS
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleMarkAsRS(sem.id)}
-                            className="text-[9px] font-bold bg-zinc-900/40 border border-slate-800/40 hover:border-slate-800/60 text-slate-400 hover:text-slate-100 px-2.5 py-1 rounded-md tracking-wider uppercase transition"
-                          >
-                            Mark as RS
-                          </button>
-                        )}
-                      </div>
 
-                      <div className="flex items-center gap-4 text-xs">
-                        <div className="flex items-center gap-3">
-                          <span className="text-slate-400">Credits: <span className="text-slate-100 font-semibold">{stats?.credits ?? 0}</span></span>
-                          {mode === 'gpa' && stats?.gpa != null && (
-                            <span className="text-slate-400">Semester GPA: <span className="text-indigo-400 font-bold">{stats.gpa.toFixed(2)}</span></span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 pl-3 border-l border-slate-800">
                           <button
                             onClick={() => setActiveCourseSelectorSemesterId(sem.id)}
-                            className="bg-zinc-800 hover:bg-zinc-700 text-slate-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition"
+                            className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-3 py-1 rounded-xl flex items-center gap-1.5 text-xs font-bold transition shadow-md shadow-indigo-600/20 cursor-pointer shrink-0"
+                            title="Add Course to Semester"
                           >
-                            <PlusCircle className="h-3.5 w-3.5" />
+                            <PlusCircle className="h-3.5 w-3.5 shrink-0" />
                             <span>Add Course</span>
                           </button>
+                        </div>
 
-                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const updated = semesters.map(s => {
-                                if (s.id === sem.id) {
-                                  return { ...s, isCollapsed: !(s.isCollapsed || false) };
-                                }
-                                return s;
-                              });
-                              updateSemesters(updated);
-                            }}
-                            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-slate-800/60 flex items-center justify-center text-slate-100 hover:text-slate-100 transition"
-                            title={sem.isCollapsed ? "Expand Semester" : "Minimize Semester"}
-                          >
-                            {sem.isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                          </button>
+                        {/* Row 3: Metrics (Credits, GPA, RS status) */}
+                        <div className="flex items-center justify-between pt-2 border-t border-white/[0.04] text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-medium text-slate-300 bg-[#090a10] border border-white/[0.08] px-2.5 py-0.5 rounded-lg shadow-inner">
+                              Credits: <strong className="text-white font-mono">{stats?.credits ?? 0}</strong>
+                            </span>
+                            {mode === 'gpa' && stats?.gpa != null && (
+                              <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/10 border border-indigo-500/25 px-2.5 py-0.5 rounded-lg">
+                                GPA: <strong className="font-mono">{stats.gpa.toFixed(2)}</strong>
+                              </span>
+                            )}
+                          </div>
 
-                          <button
-                            onClick={() => handleDeleteSemester(sem.id)}
-                            className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg transition"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <div>
+                            {sem.isRS ? (
+                              <span className="text-[10px] font-bold bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-lg tracking-wider uppercase select-none shadow-sm">
+                                RS
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleMarkAsRS(sem.id)}
+                                className="text-[10px] font-bold bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.16] text-slate-400 hover:text-slate-200 px-2.5 py-0.5 rounded-lg tracking-wider uppercase transition cursor-pointer"
+                              >
+                                Mark as RS
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Course list grid in Semester Card */}
                     {!sem.isCollapsed && (
-                      <div className="p-4 divide-y divide-zinc-800/60 flex-grow">
+                      <div className={`p-4 flex-grow ${currentLayout === 'kanban' ? 'space-y-0' : 'space-y-2.5'}`}>
                       
                       {sem.courses.length === 0 && (
-                        <div className="py-6 text-center text-slate-400 text-xs">
+                        <div className="py-8 text-center text-slate-400 text-xs italic">
                           No courses scheduled in this semester.
                         </div>
                       )}
@@ -4181,6 +4455,7 @@ export default function Home() {
                         }
 
                         const isCreditCourse = courseDetails?.category !== "Non-Credit" && (courseDetails?.credits ?? 3) > 0;
+                        const theme = getCategoryTheme(courseDetails?.category, c.code);
 
                         return (
                           <div 
@@ -4197,45 +4472,43 @@ export default function Home() {
                               setDraggingCourseCode(null);
                               setDraggingSourceSemesterId(null);
                             }}
-                            className={`flex justify-between gap-3 text-xs group transition-all duration-200 ${
+                            className={`group transition-all duration-200 ${
                               currentLayout === 'kanban' 
-                                ? "flex-col p-3.5 border border-slate-800/85 rounded-xl bg-zinc-900/45 hover:bg-zinc-900/70 hover:border-zinc-700/60 shadow-md mb-3 cursor-grab" 
-                                : "flex-col md:flex-row md:items-center py-3.5 border-b border-slate-800/40 last:border-b-0 relative"
+                                ? `p-3.5 border rounded-2xl bg-[#09090f]/90 hover:bg-[#0e0e16]/95 shadow-md mb-3 cursor-grab flex flex-col justify-between gap-3 ${theme.cardBorder} ${theme.cardGlow}` 
+                                : `p-3.5 sm:p-4 rounded-2xl bg-[#09090f]/80 hover:bg-[#0e0e16]/90 border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 relative ${theme.cardBorder} ${theme.cardGlow}`
                             } ${
                               draggingCourseCode === c.code 
                                 ? currentLayout === 'kanban'
-                                  ? "scale-105 shadow-2xl cursor-grabbing border-indigo-500 bg-indigo-955/25" 
-                                  : "bg-indigo-955/20"
+                                  ? "scale-105 shadow-2xl cursor-grabbing border-indigo-500 bg-indigo-950/40" 
+                                  : "border-indigo-500 bg-indigo-950/30"
                                 : ""
                             }`}
                           >
-                            <div className="flex items-start gap-3">
-                              
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              {/* Left category accent bar */}
+                              <div className={`w-1 self-stretch rounded-full ${theme.leftBar} shrink-0 opacity-80`} />
+
                               {/* Left side checklist check & Mode B Grade dropdown */}
-                              <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex items-center gap-2 mt-0.5 shrink-0">
                                 <button
                                   onClick={() => handleCompletionToggle(sem.id, c.code, !c.isCompleted)}
                                   title={c.isCompleted ? "Mark as incomplete" : "Mark as complete"}
-                                  className={`h-4 w-4 rounded-md transition-all duration-200 cursor-pointer shrink-0 focus:outline-none flex items-center justify-center ${
+                                  className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none ${
                                     c.isCompleted
-                                      ? 'shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                                      : 'border-2 border-slate-600 hover:border-slate-400 bg-transparent'
+                                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                                      : 'border-white/20 bg-white/[0.03] hover:border-white/40'
                                   }`}
                                 >
-                                  {c.isCompleted ? (
-                                    <div className="w-full h-full rounded-[3px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                                      <svg className="h-2.5 w-2.5 text-white stroke-current stroke-[3]" fill="none" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                      </svg>
-                                    </div>
-                                  ) : null}
+                                  {c.isCompleted && (
+                                    <Check className="h-3 w-3 text-white stroke-[3]" />
+                                  )}
                                 </button>
                                 
                                 {mode === 'gpa' && isCreditCourse && (
                                   <select
                                     value={c.grade}
                                     onChange={(e) => handleGradeChange(sem.id, c.code, e.target.value)}
-                                    className="bg-zinc-900 border border-slate-800 text-[10px] text-slate-100 rounded px-1.5 py-0.5 focus:border-indigo-500 outline-none cursor-pointer"
+                                    className="bg-[#050508] border border-white/[0.1] hover:border-indigo-400/50 text-[11px] font-bold text-indigo-300 rounded-lg px-2 py-0.5 focus:border-indigo-400 outline-none cursor-pointer shadow-inner transition"
                                   >
                                     <option value="">Grade</option>
                                     {Object.keys(GRADING_SCALE).map(g => (
@@ -4245,18 +4518,25 @@ export default function Home() {
                                 )}
 
                                 {mode === 'gpa' && !isCreditCourse && c.isCompleted && (
-                                  <span className="text-[10px] font-bold text-emerald-450 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-lg uppercase tracking-wider">
                                     Passed
                                   </span>
                                 )}
                               </div>
 
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-extrabold text-sm text-slate-100 tracking-tight">{c.code}</span>
-                                  <span className="text-slate-400 font-medium">{courseDetails?.title ?? "Custom Elective Course"}</span>
-                                  <span className="text-[10px] text-slate-400 bg-zinc-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className={`font-mono font-black text-xs sm:text-sm tracking-tight px-2 py-0.5 rounded-lg border shadow-inner ${theme.codePill}`}>
+                                    {c.code}
+                                  </span>
+                                  <span className="text-slate-200 group-hover:text-white font-semibold text-xs sm:text-sm transition-colors truncate max-w-[200px] sm:max-w-none">
+                                    {courseDetails?.title ?? "Custom Elective Course"}
+                                  </span>
+                                  <span className="text-[10px] text-slate-300 bg-white/[0.04] border border-white/[0.08] px-1.5 py-0.5 rounded-md font-mono font-semibold">
                                     {(courseDetails?.credits ?? 3)} Cr
+                                  </span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border select-none ${theme.badge}`}>
+                                    {theme.label}
                                   </span>
                                   {renderMandatoryBadge(c.code)}
 
@@ -4264,8 +4544,8 @@ export default function Home() {
                                   {attempt?.badge && (
                                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                                       attempt.isError 
-                                        ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400' 
-                                        : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                                        ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400' 
+                                        : 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
                                     }`}>
                                       {attempt.badge}
                                     </span>
@@ -4273,16 +4553,16 @@ export default function Home() {
                                 </div>
 
                                 {/* Warning outputs */}
-                                <div className="space-y-1 mt-1">
+                                <div className="space-y-1 mt-1.5">
                                   {warnings && warnings.type === 'hard' && (
-                                    <div className="flex items-center gap-1.5 text-rose-450 font-bold text-[10px]">
-                                      <AlertTriangle className="h-3 w-3 shrink-0 text-rose-455" />
+                                    <div className="flex items-center gap-1.5 text-rose-400 font-bold text-[10px]">
+                                      <AlertTriangle className="h-3 w-3 shrink-0 text-rose-400" />
                                       <span>Prerequisite warning: Requires {warnings.missing.join(", ")} prior to this semester</span>
                                     </div>
                                   )}
                                   {warnings && warnings.type === 'soft' && (
-                                    <div className="flex items-center gap-1.5 text-amber-450 font-semibold text-[10px]">
-                                      <Info className="h-3 w-3 shrink-0 text-amber-455" />
+                                    <div className="flex items-center gap-1.5 text-amber-400 font-semibold text-[10px]">
+                                      <Info className="h-3 w-3 shrink-0 text-amber-400" />
                                       <span>Tip: Soft Prerequisite recommended first ({warnings.missing.join(", ")})</span>
                                     </div>
                                   )}
@@ -4297,7 +4577,7 @@ export default function Home() {
                             </div>
 
                             {/* Right side selectors and management */}
-                            <div className="flex items-center gap-3 self-end md:self-auto">
+                            <div className="flex items-center gap-1.5 self-end md:self-auto shrink-0">
                               
                               {/* Move course dropdown/selection */}
                               <div className="relative">
@@ -4308,7 +4588,7 @@ export default function Home() {
                                       e.target.value = ""; // Reset
                                     }
                                   }}
-                                  className="bg-zinc-900 hover:bg-zinc-800 border border-slate-800 text-[10px] text-slate-400 rounded-lg px-2 py-1 cursor-pointer transition focus:outline-none"
+                                  className="bg-[#050508] hover:bg-[#0c0c12] border border-white/[0.08] hover:border-white/[0.18] text-[10px] font-semibold text-slate-300 rounded-xl px-2.5 py-1.5 cursor-pointer transition focus:outline-none shadow-sm"
                                 >
                                   <option value="">Move To...</option>
                                   {semesters.filter(s => s.id !== sem.id).map(s => {
@@ -4332,7 +4612,7 @@ export default function Home() {
                                   setSwappingCourseCode(c.code);
                                 }}
                                 title="Swap Course"
-                                className="text-slate-400 hover:text-indigo-400 p-1.5 rounded transition"
+                                className="h-7 w-7 rounded-xl bg-white/[0.03] hover:bg-indigo-500/20 border border-white/[0.08] hover:border-indigo-500/40 text-slate-400 hover:text-indigo-300 flex items-center justify-center transition cursor-pointer shadow-sm"
                               >
                                 <ArrowRightLeft className="h-3.5 w-3.5" />
                               </button>
@@ -4340,7 +4620,8 @@ export default function Home() {
                               {/* Remove Course button */}
                               <button
                                 onClick={() => handleRemoveCourse(sem.id, c.code)}
-                                className="text-slate-400 hover:text-rose-400 p-1.5 rounded transition"
+                                className="h-7 w-7 rounded-xl bg-white/[0.03] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer shadow-sm"
+                                title="Remove Course"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -4370,19 +4651,24 @@ export default function Home() {
       {/* 4. Search and Add Course Combobox Overlay */}
       {activeCourseSelectorSemesterId !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f0f13] border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="bg-[#08080d]/98 border border-white/[0.1] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] backdrop-blur-xl">
             
             {/* Combobox Header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm text-slate-100">
-                  {swappingCourseCode ? `Swap Course: ${swappingCourseCode}` : "Add Course to Semester"}
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  {swappingCourseCode 
-                    ? "Select a new course to swap into this slot" 
-                    : "Select a course to add to your semester timeline plan"}
-                </p>
+            <div className="p-5 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.01]">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-indigo-400 shrink-0 shadow-sm">
+                  {swappingCourseCode ? <ArrowRightLeft className="h-5 w-5" /> : <PlusCircle className="h-5 w-5" />}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white tracking-tight">
+                    {swappingCourseCode ? `Swap Course: ${swappingCourseCode}` : "Add Course to Semester"}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-normal">
+                    {swappingCourseCode 
+                      ? "Select a new course to swap into this slot" 
+                      : "Select a course to add to your semester timeline plan"}
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => {
@@ -4390,20 +4676,20 @@ export default function Home() {
                   setSwappingCourseCode(null);
                   setCourseSearchQuery("");
                 }} 
-                className="text-slate-400 hover:text-slate-100 p-1 rounded"
+                className="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Combobox Filter tabs and Search */}
-            <div className="p-4 bg-zinc-900/30 border-b border-slate-800 space-y-3">
+            <div className="p-5 bg-[#050508]/60 border-b border-white/[0.06] space-y-3.5">
               <input
                 type="text"
                 placeholder="Search by code (e.g. CSE220) or name..."
                 value={courseSearchQuery}
                 onChange={(e) => setCourseSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition"
+                className="w-full bg-[#030305] border border-white/[0.1] text-xs px-4 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-400 transition shadow-inner font-medium"
               />
 
               <div className="flex flex-wrap gap-1.5">
@@ -4411,10 +4697,10 @@ export default function Home() {
                   <button
                     key={filterTab}
                     onClick={() => setCourseSearchFilter(filterTab)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
                       courseSearchFilter === filterTab
-                        ? 'bg-indigo-600/10 border-indigo-500 text-indigo-400'
-                        : 'bg-zinc-950 border-slate-800 text-slate-400 hover:text-slate-100'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-transparent text-white shadow-md shadow-blue-500/20'
+                        : 'bg-[#08080d] border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.04]'
                     }`}
                   >
                     {filterTab}
@@ -4424,9 +4710,9 @@ export default function Home() {
             </div>
 
             {/* Search list results */}
-            <div className="flex-1 overflow-y-auto divide-y divide-zinc-800 p-2 space-y-1">
+            <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04] p-3 space-y-1 custom-scrollbar">
               {filteredSearchCourses.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
+                <div className="py-8 text-center text-slate-400 text-xs italic">
                   No matching courses found.
                 </div>
               ) : (
@@ -4435,6 +4721,7 @@ export default function Home() {
                   const { hp } = getCoursePrereqs(course.code, onboardingData.pathway, onboardingData.creditOption);
                   const missingHp = hp.filter(code => !isCourseCompletedPrior(code, targetSemIdx, semesters, mode));
                   const isLocked = missingHp.length > 0;
+                  const theme = getCategoryTheme(course.category, course.code);
 
                   return (
                     <button
@@ -4445,21 +4732,26 @@ export default function Home() {
                           handleAddCourseToSemester(activeCourseSelectorSemesterId, course.code);
                         }
                       }}
-                      className={`w-full p-3 text-left hover:bg-zinc-900/60 rounded-xl transition flex items-center justify-between text-xs group ${
-                        isLocked ? 'opacity-40 cursor-not-allowed' : ''
+                      className={`w-full p-3.5 text-left hover:bg-white/[0.04] rounded-2xl transition flex items-center justify-between text-xs group ${
+                        isLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
                       }`}
                     >
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-extrabold text-slate-100 text-sm tracking-tight group-hover:text-indigo-400 transition">{course.code}</span>
-                          <span className="text-[9px] bg-zinc-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono text-slate-400">
+                          <span className={`font-mono font-black text-xs sm:text-sm px-2 py-0.5 rounded-lg border shadow-inner ${theme.codePill}`}>
+                            {course.code}
+                          </span>
+                          <span className="text-[10px] bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded-lg font-mono font-semibold text-slate-300">
                             {course.credits} Credits
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border select-none ${theme.badge}`}>
+                            {theme.label}
                           </span>
                           {renderMandatoryBadge(course.code)}
                         </div>
-                        <p className="text-slate-400 text-[10px] mt-0.5">{course.title}</p>
+                        <p className="text-slate-300 text-xs mt-1 font-medium">{course.title}</p>
                         {isLocked && (
-                          <div className="flex items-center gap-1 mt-1 text-[9px] text-rose-400 font-semibold">
+                          <div className="flex items-center gap-1 mt-1 text-[10px] text-rose-400 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
                             <span>Cannot Add: Missing Hard Prerequisite ({missingHp.join(", ")})</span>
                           </div>
@@ -4467,8 +4759,8 @@ export default function Home() {
                       </div>
 
                       <div>
-                        <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
-                          {course.category}
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-xl border select-none ${theme.badge}`}>
+                          {theme.label}
                         </span>
                       </div>
                     </button>
@@ -4484,18 +4776,22 @@ export default function Home() {
       {/* 4.5. Category Course Selector Modal Overlay */}
       {activeCategorySelectorKey !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f0f13] border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="bg-[#08080d]/98 border border-white/[0.1] rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[85vh] backdrop-blur-xl">
             
             {/* Modal Header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
-                  <BookOpen className="h-4.5 w-4.5 text-indigo-400" />
-                  Add to {categoryDetails.name}
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  {categoryDetails.desc}
-                </p>
+            <div className="p-5 border-b border-white/[0.08] flex items-center justify-between bg-white/[0.01]">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-indigo-400 shrink-0 shadow-sm">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white tracking-tight">
+                    Add to {categoryDetails.name}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-normal">
+                    {categoryDetails.desc}
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => {
@@ -4503,47 +4799,52 @@ export default function Home() {
                   setSelectedCategoryCourseCode("");
                   setCategoryCourseSearchQuery("");
                 }} 
-                className="text-slate-400 hover:text-slate-100 p-1 rounded"
+                className="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Target Semester Selector */}
-            <div className="p-4 bg-zinc-900/30 border-b border-slate-800 space-y-2">
+            <div className="p-5 bg-[#050508]/60 border-b border-white/[0.06] space-y-2">
               <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Select Target Semester:</label>
-              <select
-                value={selectedCategoryTargetSemesterId}
-                onChange={(e) => setSelectedCategoryTargetSemesterId(e.target.value)}
-                className="w-full bg-zinc-950 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
-              >
-                {semesters.map((sem, semIdx) => {
-                  const intake = semesterIntakes[semIdx];
-                  const semTermYear = `${sem.term || intake?.term || 'Spring'} ${sem.year || intake?.year || 2025}`;
-                  const semLabel = sem.isRS ? `RS (${semTermYear})` : `${sem.name} (${semTermYear})`;
-                  return (
-                    <option key={sem.id} value={sem.id}>
-                      {semLabel}
-                    </option>
-                  );
-                })}
-              </select>
+              <div className="relative">
+                <select
+                  value={selectedCategoryTargetSemesterId}
+                  onChange={(e) => setSelectedCategoryTargetSemesterId(e.target.value)}
+                  className="w-full appearance-none bg-[#030305] border border-white/[0.1] hover:border-white/[0.2] text-xs pl-4 pr-11 py-3 rounded-2xl text-slate-100 outline-none focus:border-indigo-400 transition cursor-pointer shadow-inner font-semibold"
+                >
+                  {semesters.map((sem, semIdx) => {
+                    const intake = semesterIntakes[semIdx];
+                    const semTermYear = `${sem.term || intake?.term || 'Spring'} ${sem.year || intake?.year || 2025}`;
+                    const semLabel = sem.isRS ? `RS (${semTermYear})` : `${sem.name} (${semTermYear})`;
+                    return (
+                      <option key={sem.id} value={sem.id}>
+                        {semLabel}
+                      </option>
+                    );
+                  })}
+                </select>
+                <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 flex items-center">
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+              </div>
             </div>
 
             {/* Course Search Input */}
-            <div className="p-4 bg-zinc-900/30 border-b border-slate-800 space-y-2">
+            <div className="p-5 bg-[#050508]/60 border-b border-white/[0.06] space-y-2">
               <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Select Course to Add:</label>
               <input
                 type="text"
                 placeholder="Search course by code or title..."
                 value={categoryCourseSearchQuery}
                 onChange={(e) => setCategoryCourseSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950 border border-slate-800 text-xs px-3.5 py-2.5 rounded-xl text-slate-100 outline-none focus:border-indigo-500 transition"
+                className="w-full bg-[#030305] border border-white/[0.1] text-xs px-4 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-400 transition shadow-inner font-medium"
               />
             </div>
 
             {/* Filtered Courses List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-zinc-800 p-3 space-y-1 bg-zinc-950/20 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04] p-3 space-y-1 bg-[#050508]/40 custom-scrollbar">
               {categoryFilteredCourses.length === 0 ? (
                 <div className="py-8 text-center text-slate-400 text-xs italic">
                   {categoryCourseSearchQuery.trim() !== "" 
@@ -4557,6 +4858,7 @@ export default function Home() {
                   const missingHp = hp.filter(code => !isCourseCompletedPrior(code, targetSemIdx, semesters, mode));
                   const isLocked = missingHp.length > 0;
                   const isSelected = selectedCategoryCourseCode === course.code;
+                  const theme = getCategoryTheme(course.category, course.code);
 
                   const compState = getCompletedCourseState(course.code);
                   const isCompleted = compState.isCompleted;
@@ -4567,32 +4869,35 @@ export default function Home() {
                       type="button"
                       disabled={isLocked}
                       onClick={() => setSelectedCategoryCourseCode(course.code)}
-                      className={`w-full p-3 text-left hover:bg-zinc-900/60 rounded-xl border transition flex items-center justify-between text-xs group ${
+                      className={`w-full p-3.5 text-left rounded-2xl border transition flex items-center justify-between text-xs group cursor-pointer ${
                         isLocked 
                           ? 'opacity-40 cursor-not-allowed border-transparent' 
                           : isSelected
-                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300'
-                            : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100'
+                            ? 'bg-indigo-600/15 border-indigo-500/80 text-white shadow-md'
+                            : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
                       }`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`font-extrabold text-sm tracking-tight transition ${isSelected ? 'text-indigo-400' : 'text-slate-100'}`}>
+                          <span className={`font-mono font-black text-xs sm:text-sm px-2 py-0.5 rounded-lg border shadow-inner ${theme.codePill}`}>
                             {course.code}
                           </span>
-                          <span className="text-[9px] bg-zinc-900 border border-slate-800 px-1.5 py-0.5 rounded font-mono text-slate-400">
+                          <span className="text-[10px] bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded-lg font-mono font-semibold text-slate-300">
                             {course.credits} Credits
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border select-none ${theme.badge}`}>
+                            {theme.label}
                           </span>
                           {renderMandatoryBadge(course.code)}
                           {isCompleted && (
-                            <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                            <span className="text-[10px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
                               Completed {compState.grade && `(${compState.grade})`}
                             </span>
                           )}
                         </div>
-                        <p className="text-slate-400 text-[10px] mt-0.5">{course.title}</p>
+                        <p className="text-slate-300 text-xs mt-1 font-medium">{course.title}</p>
                         {isLocked && (
-                          <div className="flex items-center gap-1 mt-1 text-[9px] text-rose-400 font-semibold">
+                          <div className="flex items-center gap-1 mt-1 text-[10px] text-rose-400 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
                             <span>Cannot Add: Missing Hard Prerequisite ({missingHp.join(", ")})</span>
                           </div>
@@ -4600,8 +4905,8 @@ export default function Home() {
                       </div>
 
                       <div className="text-right pl-4">
-                        <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider block">
-                          {course.category}
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider block px-2.5 py-1 rounded-xl border select-none ${theme.badge}`}>
+                          {theme.label}
                         </span>
                       </div>
                     </button>
@@ -4611,7 +4916,7 @@ export default function Home() {
             </div>
 
             {/* Modal Actions */}
-            <div className="p-4 border-t border-slate-800 flex gap-3 bg-zinc-900/10">
+            <div className="p-5 border-t border-white/[0.08] flex gap-3 bg-[#050508]/60">
               <button
                 type="button"
                 onClick={() => {
@@ -4619,7 +4924,7 @@ export default function Home() {
                   setSelectedCategoryCourseCode("");
                   setCategoryCourseSearchQuery("");
                 }}
-                className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-slate-800 text-slate-100 text-xs font-semibold rounded-xl transition cursor-pointer"
+                className="flex-1 py-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-200 text-xs font-bold rounded-2xl transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -4627,7 +4932,7 @@ export default function Home() {
                 type="button"
                 disabled={!selectedCategoryCourseCode}
                 onClick={handleAddCategoryCourse}
-                className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-100 text-xs font-semibold rounded-xl shadow-lg transition cursor-pointer"
+                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-2xl shadow-lg shadow-blue-600/25 transition cursor-pointer"
               >
                 Add Course
               </button>
@@ -4640,28 +4945,33 @@ export default function Home() {
       {/* 5. Reset Confirmation Modal overlay */}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0f0f13] border border-slate-800 rounded-xl w-full max-w-sm shadow-2xl p-6 space-y-4">
+          <div className="bg-[#08080d]/95 border border-slate-700/80 rounded-3xl w-full max-w-sm shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-3 text-rose-400">
-              <AlertTriangle className="h-6 w-6 shrink-0" />
-              <h3 className="font-bold text-sm text-slate-100">Reset Course Planner</h3>
+              <div className="h-10 w-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-400">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-white">Reset Planner</h3>
+                <p className="text-[11px] text-rose-300">Irreversible Action</p>
+              </div>
             </div>
             
-            <p className="text-xs text-slate-400 leading-relaxed">
-              This action will completely wipe out your course schedule, grades, and Capstone thesis records. This is irreversible.
+            <p className="text-xs text-slate-300 leading-relaxed">
+              This action will completely wipe out your course schedule, grades, and Capstone thesis records.
             </p>
 
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowResetConfirm(false)}
-                className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-800 border border-slate-800 text-slate-100 text-xs font-semibold rounded-xl transition"
+                className="flex-1 py-2.5 bg-[#050508] hover:bg-[#0e0e14] border border-slate-800 text-slate-200 text-xs font-bold rounded-2xl transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResetData}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-semibold rounded-xl shadow-lg transition duration-200 cursor-pointer shadow-indigo-600/10 hover:shadow-indigo-600/20"
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-2xl shadow-lg shadow-rose-600/30 transition duration-200 cursor-pointer"
               >
-                Wipe Data & Reset
+                Wipe Data
               </button>
             </div>
           </div>
@@ -4669,25 +4979,25 @@ export default function Home() {
       )}
 
       {/* Proper Stationary Footer Section */}
-      <footer className="mt-auto pt-8 pb-6 border-t border-slate-800 bg-zinc-950/20 flex flex-col items-center justify-center gap-4 text-center">
+      <footer className="mt-auto pt-8 pb-6 border-t border-slate-800/80 bg-[#030304] flex flex-col items-center justify-center gap-4 text-center">
         {/* Connect with me social links */}
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-400">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs font-bold text-slate-400">
           <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold leading-none">Connect with me:</span>
           <a
             href="https://github.com/fakekhanabdullah"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 hover:text-indigo-400 transition leading-none"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#08080d] border border-slate-800 hover:border-indigo-500/50 hover:text-indigo-400 transition leading-none text-slate-300"
           >
             <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400 shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
             <span className="leading-none">GitHub</span>
           </a>
-          <span className="text-zinc-800 self-center">|</span>
+          <span className="text-zinc-700 self-center">|</span>
           <a
             href="https://www.linkedin.com/in/khan-abdullahh"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 hover:text-indigo-400 transition leading-none"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#08080d] border border-slate-800 hover:border-indigo-500/50 hover:text-indigo-400 transition leading-none text-slate-300"
           >
             <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400 shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
             <span className="leading-none">LinkedIn</span>
@@ -4695,30 +5005,33 @@ export default function Home() {
         </div>
 
         {/* Muted Copyright Disclaimer */}
-        <div className="text-[10px] text-slate-400 leading-relaxed font-medium">
-          <p>© 2026 Flow136. Made by: Khan Abdullah</p>
+        <div className="text-[11px] text-slate-400 leading-relaxed font-medium">
+          <p>© 2026 Flow136. Made with care by <strong className="text-slate-200">Khan Abdullah</strong></p>
         </div>
       </footer>
 
       {/* 5. Grade Sheet Preview Modal */}
       {showGradeSheetModal && isMounted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-transparent print:backdrop-none no-print-backdrop">
-          <div className="bg-[#09090b]/95 border border-slate-800/80 rounded-xl max-w-4xl w-full p-6 text-slate-100 shadow-[0_0_50px_rgba(99,102,241,0.15)] relative flex flex-col max-h-[92vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:p-0 print:static print:bg-transparent print:backdrop-none no-print-backdrop">
+          <div className="bg-[#08080d]/98 border border-white/10 rounded-3xl max-w-4xl w-full p-4 sm:p-6 text-slate-100 shadow-2xl relative flex flex-col max-h-[94vh] overflow-hidden backdrop-blur-xl transition print:max-h-none print:border-none print:shadow-none print:w-full print:p-0 print:bg-transparent print-only-container">
             
-            {/* Modal Action Header Bar (3 Controls) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800/60 no-print">
+            {/* Modal Action Header Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-white/[0.08] no-print">
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
-                  <Camera className="h-5 w-5" />
+                <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
+                  <Camera className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                 </div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-100">Academic Progress Snapshot Preview</h3>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white">Academic Progress Snapshot Preview</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">High-resolution exportable grade sheet</p>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {/* Control 1: Download PNG Button */}
                 <button
                   onClick={handleGenerateGradeSheet}
                   disabled={isGeneratingSnapshot}
-                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white text-xs font-extrabold px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl transition shadow-lg shadow-indigo-500/25 disabled:opacity-50 cursor-pointer active:scale-[0.98]"
                 >
                   <Download className="h-4 w-4" />
                   <span>{isGeneratingSnapshot ? "Generating PNG..." : "Download PNG"}</span>
@@ -4727,7 +5040,7 @@ export default function Home() {
                 {/* Control 2: Close Button */}
                 <button
                   onClick={() => setShowGradeSheetModal(false)}
-                  className="h-8 w-8 rounded-xl bg-white/5 hover:bg-white/10 border border-slate-800/60 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
                   title="Close preview"
                 >
                   <X className="h-4 w-4" />
@@ -4736,224 +5049,313 @@ export default function Home() {
             </div>
 
             {/* Scrollable Printable Grade Sheet Container */}
-            <div className={`overflow-y-auto overflow-x-auto max-w-full custom-scrollbar pt-4 pr-1 pb-4 flex items-start flex-grow ${snapshotScale < 1 ? 'justify-start pl-4' : 'justify-center'}`}>
-              {/* Dynamic responsive scaling wrapper to fit 750px perfectly in any viewport width */}
+            <div className="overflow-y-auto overflow-x-hidden max-w-full custom-scrollbar py-3 sm:py-4 flex items-start justify-center flex-grow">
+              {/* Dynamic responsive scaling wrapper to fit 750px cleanly in any viewport width */}
               <div 
                 className="shrink-0 transition-all duration-300"
                 style={{
                   width: `${750 * snapshotScale}px`,
                   height: `${snapshotHeight * snapshotScale}px`,
                   transform: `scale(${snapshotScale})`,
-                  transformOrigin: snapshotScale < 1 ? 'top left' : 'top center'
+                  transformOrigin: 'top center'
                 }}
               >
                 {/* Visible Grade Sheet Node Target */}
                 <div 
                   id="flow136-grade-sheet-export-node"
                   style={{ 
-                    backgroundColor: '#050507',
+                    backgroundColor: '#030305',
                     fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                   }}
-                  className="w-[750px] min-w-[750px] h-auto min-h-[600px] border-2 border-indigo-500/40 rounded-xl p-6 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto"
+                  className="w-[750px] min-w-[750px] h-auto min-h-[600px] border border-white/[0.12] rounded-3xl p-7 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto bg-[#030305]"
                 >
-                {/* Watermark Background (Z-Index 0) */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden gap-6">
-                  <div className="h-28 w-28 rounded-[28px] border-4 border-indigo-400/2 bg-indigo-500/[0.005] flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.01)] shrink-0">
-                    <svg className="h-16 w-16 text-slate-100/[0.018] fill-none stroke-current stroke-[2.5]" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                    </svg>
-                  </div>
-                  <span className="text-[100px] font-black tracking-tight text-slate-100/[0.018] whitespace-nowrap">
-                    Flow136
-                  </span>
-                </div>
+                  {/* Ambient Background Glow (Z-Index 0) */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-indigo-500/[0.07] blur-3xl pointer-events-none rounded-full" />
 
-                {/* Section 1: Header (Z-Index 10) */}
-                <div className="flex items-center justify-between pb-6 border-b border-slate-800/60 relative z-10">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.22)]">
-                      <svg className="h-5.5 w-5.5 text-indigo-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-                      </svg>
+                  {/* Watermark Background (Z-Index 0) */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0 overflow-hidden gap-6 opacity-[0.035]">
+                    <div className="h-28 w-28 rounded-3xl border-2 border-indigo-400 flex items-center justify-center">
+                      <Compass className="h-16 w-16 text-indigo-400" />
                     </div>
-                    <div>
-                      <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Flow136</h1>
-                      <span className="text-[10px] font-semibold tracking-widest text-indigo-400 uppercase block">
-                        CURRICULUM PROGRESS & GRADE SHEET
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-indigo-300 block">
-                      {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Planner
+                    <span className="text-[85px] font-black tracking-tight text-white whitespace-nowrap">
+                      Flow136
                     </span>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                      Target Goal: 136 Credits
-                    </p>
-                  </div>
-                </div>
-
-                {/* Section 2: Executive Status Bars & Standing (Z-Index 10) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 relative z-10">
-                  {/* Master Credits Box */}
-                  <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">Total Degree Progress</span>
-                      <span className="text-slate-100 font-extrabold">{cumulativeStats.completedCredits} / 136 Cr Completed</span>
-                    </div>
-                    <div className="h-2.5 w-full bg-slate-955 border border-slate-800/60 rounded-full overflow-hidden p-0.5">
-                      <div 
-                        style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
-                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
-                      />
-                    </div>
-                    {/* Mini Categories & Timeline Stats */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 text-[10px] text-slate-400">
-                      <div>Program Core: <span className="text-slate-100 font-semibold">{curriculumProgress.coreCompleted}/{curriculumProgress.coreTotal} Cr</span></div>
-                      <div>School Core: <span className="text-slate-100 font-semibold">{curriculumProgress.schoolCoreCompleted}/{curriculumProgress.schoolCoreTotal} Cr</span></div>
-                      <div>GenEd Streams: <span className="text-slate-100 font-semibold">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed}/39 Cr</span></div>
-                      <div>Major Electives: <span className="text-slate-100 font-semibold">{curriculumProgress.electiveCompleted}/6 Cr</span></div>
-                      <div className="col-span-2">Capstone Thesis: <span className="text-slate-100 font-semibold">{curriculumProgress.thesisCompleted}/{curriculumProgress.thesisTotal} Cr</span></div>
-                      <div className="col-span-2 pt-2 border-t border-slate-800/40 flex justify-between text-[10px] text-slate-400">
-                        <span>Semesters Planned: <strong className="text-indigo-300">{semesters.length}</strong></span>
-                        <span>Completed Courses: <strong className="text-emerald-400">{semesters.reduce((acc, sem) => acc + sem.courses.filter(c => mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F")).length, 0) + (isCSE400Passed ? 1 : 0)}</strong></span>
-                      </div>
-                    </div>
                   </div>
 
-                  {/* Academic Standing & CGPA Display (ONLY in Mode B) */}
-                  {mode === 'gpa' && (
-                    <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl flex flex-col justify-between">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cumulative CGPA</span>
-                        {cumulativeStats.cgpa >= 2.0 ? (
-                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                            Good Standing
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                            Probation Range
-                          </span>
-                        )}
+                  {/* Section 1: Header (Z-Index 10) */}
+                  <div className="flex items-center justify-between pb-5 border-b border-white/[0.08] relative z-10">
+                    <div className="flex items-center gap-3.5">
+                      <div className="h-11 w-11 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.25)] shrink-0">
+                        <Compass className="h-6 w-6 text-indigo-400" />
                       </div>
-                      <div className="text-3xl font-extrabold text-slate-100 mt-1">
-                        {cumulativeStats.cgpa.toFixed(2)} <span className="text-xs text-slate-400 font-normal">/ 4.00 Scale</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h1 className="text-2xl font-black tracking-tight text-white">Flow136</h1>
+                          <span className="text-[10px] font-bold bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            CSE Curriculum
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold tracking-widest text-indigo-400 uppercase block mt-0.5">
+                          ACADEMIC PROGRESS &amp; GRADE REPORT
+                        </span>
                       </div>
-                      <p className="text-[10px] text-slate-400 leading-relaxed">
-                        Evaluated across chronologically latest attempts.
+                    </div>
+
+                    <div className="text-right space-y-1">
+                      <div className="inline-block px-3 py-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-bold text-indigo-300">
+                        {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Target: 136 Degree Credits
                       </p>
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                {/* Section 3: Completed Courses Table / Grade Sheet (Z-Index 10) */}
-                <div className="relative z-10 space-y-3">
-                  <h2 className="text-xs font-bold tracking-wider text-slate-100 uppercase">COMPLETED COURSEWORK</h2>
-                  
-                  {(() => {
-                    const exportCompletedCourses: Array<{ code: string; title: string; credits: number; grade: string; semesterName: string }> = [];
+                  {/* Section 2: Executive Status Bars & Standing (Z-Index 10) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-5 relative z-10">
+                    {/* Master Credits Box */}
+                    <div className="bg-[#08080f] border border-white/[0.08] p-4 rounded-2xl space-y-3 shadow-md">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-300 font-bold uppercase tracking-wider text-[10px]">Total Degree Progress</span>
+                        <span className="text-white font-black">{cumulativeStats.completedCredits} / 136 Cr Completed</span>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="h-3 w-full bg-[#030306] border border-white/[0.08] rounded-full overflow-hidden p-0.5 shadow-inner">
+                        <div 
+                          style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
+                          className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all shadow-[0_0_12px_rgba(99,102,241,0.5)]"
+                        />
+                      </div>
+
+                      {/* Mini Categories & Timeline Stats */}
+                      <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-blue-500/[0.06] border border-blue-500/20">
+                          <span className="text-blue-300 font-semibold flex items-center gap-1.5 text-[10px]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                            Dept Core
+                          </span>
+                          <span className="font-mono font-bold text-blue-200 text-[10px]">{curriculumProgress.coreCompleted}/{curriculumProgress.coreTotal} Cr</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-cyan-500/[0.06] border border-cyan-500/20">
+                          <span className="text-cyan-300 font-semibold flex items-center gap-1.5 text-[10px]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                            School Core
+                          </span>
+                          <span className="font-mono font-bold text-cyan-200 text-[10px]">{curriculumProgress.schoolCoreCompleted}/{curriculumProgress.schoolCoreTotal} Cr</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/20">
+                          <span className="text-amber-300 font-semibold flex items-center gap-1.5 text-[10px]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                            Electives
+                          </span>
+                          <span className="font-mono font-bold text-amber-200 text-[10px]">{curriculumProgress.electiveCompleted}/6 Cr</span>
+                        </div>
+
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-purple-500/[0.06] border border-purple-500/20">
+                          <span className="text-purple-300 font-semibold flex items-center gap-1.5 text-[10px]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                            Capstone
+                          </span>
+                          <span className="font-mono font-bold text-purple-200 text-[10px]">{curriculumProgress.thesisCompleted}/{curriculumProgress.thesisTotal} Cr</span>
+                        </div>
+
+                        <div className="col-span-2 flex items-center justify-between p-2 rounded-xl bg-rose-500/[0.06] border border-rose-500/20">
+                          <span className="text-rose-300 font-semibold flex items-center gap-1.5 text-[10px]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                            GenEd Streams
+                          </span>
+                          <span className="font-mono font-bold text-rose-200 text-[10px]">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed}/39 Cr</span>
+                        </div>
+
+                        <div className="col-span-2 pt-2 border-t border-white/[0.06] flex justify-between text-[10px] text-slate-400">
+                          <span>Semesters Planned: <strong className="text-indigo-300 font-mono">{semesters.length}</strong></span>
+                          <span>Completed Courses: <strong className="text-emerald-400 font-mono">{semesters.reduce((acc, sem) => acc + sem.courses.filter(c => mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F")).length, 0) + (isCSE400Passed ? 1 : 0)}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Academic Standing & CGPA Display */}
+                    {mode === 'gpa' ? (
+                      <div className="bg-[#08080f] border border-white/[0.08] p-4 rounded-2xl flex flex-col justify-between shadow-md">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Cumulative CGPA</span>
+                          {cumulativeStats.cgpa >= 2.0 ? (
+                            <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                              Good Standing
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center whitespace-nowrap text-[9px] font-extrabold bg-rose-500/15 border border-rose-500/30 text-rose-300 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                              Academic Probation
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-3xl font-black text-white mt-1">
+                            {cumulativeStats.cgpa.toFixed(2)} <span className="text-xs text-slate-400 font-mono font-normal">/ 4.00</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Evaluated across chronologically latest course attempts.
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-slate-400">
+                          <span>Total Graded Credits: <strong className="text-white font-mono">{cumulativeStats.completedCredits} Cr</strong></span>
+                          <span>Scale: <strong className="text-indigo-300 font-mono">UGC 4.00</strong></span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-[#08080f] border border-white/[0.08] p-4 rounded-2xl flex flex-col justify-between shadow-md">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Planning Mode</span>
+                          <span className="text-[9px] font-bold bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-2.5 py-0.5 rounded-full uppercase">
+                            Curriculum Tracker
+                          </span>
+                        </div>
+                        <div className="my-auto py-2">
+                          <p className="text-xs text-slate-200 font-semibold">
+                            Graduation Progress: {((cumulativeStats.completedCredits / 136) * 100).toFixed(1)}%
+                          </p>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            {136 - cumulativeStats.completedCredits > 0 
+                              ? `${136 - cumulativeStats.completedCredits} credits remaining to complete degree requirements.`
+                              : 'All degree credit requirements fulfilled!'}
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-white/[0.06] text-[10px] text-slate-400 flex justify-between">
+                          <span>Target: 136 Credits</span>
+                          <span className="text-emerald-400 font-semibold">Track Active</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 3: Completed Courses Table / Grade Sheet (Z-Index 10) */}
+                  <div className="relative z-10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-black tracking-wider text-white uppercase flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-indigo-400" />
+                        COMPLETED COURSEWORK
+                      </h2>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        Official Degree Audit
+                      </span>
+                    </div>
                     
-                    semesters.forEach((sem, semIdx) => {
-                      const intake = semesterIntakes[semIdx];
-                      const semTermYear = `${sem.term || intake?.term || 'Spring'} ${sem.year || intake?.year || 2025}`;
-                      const semLabel = sem.isRS ? `RS (${semTermYear})` : `${sem.name} (${semTermYear})`;
+                    {(() => {
+                      const exportCompletedCourses: Array<{ code: string; title: string; credits: number; grade: string; semesterName: string }> = [];
+                      
+                      semesters.forEach((sem, semIdx) => {
+                        const intake = semesterIntakes[semIdx];
+                        const semTermYear = `${sem.term || intake?.term || 'Spring'} ${sem.year || intake?.year || 2025}`;
+                        const semLabel = sem.isRS ? `RS (${semTermYear})` : `${sem.name} (${semTermYear})`;
 
-                      sem.courses.forEach(c => {
-                        if (c.code === "CSE400") return;
-                        const isComp = mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F");
-                        if (isComp) {
-                          const cData = COURSES.find(co => co.code === c.code);
-                          exportCompletedCourses.push({
-                            code: c.code,
-                            title: cData?.title || c.code,
-                            credits: cData?.category === "Non-Credit" ? 0 : (cData?.credits ?? 3),
-                            grade: c.grade || "-",
-                            semesterName: semLabel
-                          });
-                        }
+                        sem.courses.forEach(c => {
+                          if (c.code === "CSE400") return;
+                          const isComp = mode === 'tracker' ? c.isCompleted : (c.isCompleted && c.grade !== "" && c.grade !== "F");
+                          if (isComp) {
+                            const cData = COURSES.find(co => co.code === c.code);
+                            exportCompletedCourses.push({
+                              code: c.code,
+                              title: cData?.title || c.code,
+                              credits: cData?.category === "Non-Credit" ? 0 : (cData?.credits ?? 3),
+                              grade: c.grade || "-",
+                              semesterName: semLabel
+                            });
+                          }
+                        });
                       });
-                    });
 
-                    if (isCSE400Passed) {
-                      let capGrade = "-";
-                      for (const sem of semesters) {
-                        const found = sem.courses.find(c => c.code === "CSE400");
-                        if (found) {
-                          capGrade = found.grade || "-";
-                          break;
+                      if (isCSE400Passed) {
+                        let capGrade = "-";
+                        for (const sem of semesters) {
+                          const found = sem.courses.find(c => c.code === "CSE400");
+                          if (found) {
+                            capGrade = found.grade || "-";
+                            break;
+                          }
                         }
+                        exportCompletedCourses.push({
+                          code: "CSE400",
+                          title: "Final Year Capstone: Thesis, Project, or Internship",
+                          credits: 4,
+                          grade: capGrade,
+                          semesterName: "Capstone Phase"
+                        });
                       }
-                      exportCompletedCourses.push({
-                        code: "CSE400",
-                        title: "Final Year Capstone: Thesis, Project, or Internship",
-                        credits: 4,
-                        grade: capGrade,
-                        semesterName: "Capstone Phase"
-                      });
-                    }
 
-                    if (exportCompletedCourses.length === 0) {
+                      if (exportCompletedCourses.length === 0) {
+                        return (
+                          <div className="p-6 text-center text-slate-400 text-xs italic border border-white/[0.08] rounded-2xl bg-[#08080f]">
+                            No completed courses recorded yet.
+                          </div>
+                        );
+                      }
+
                       return (
-                        <div className="p-6 text-center text-slate-400 text-xs italic border border-slate-800/60 rounded-xl bg-slate-900/40">
-                          No completed courses recorded yet.
+                        <div className="w-full border border-white/[0.08] rounded-2xl overflow-hidden bg-[#08080f] shadow-md">
+                          <table className="w-full text-xs text-left border-collapse">
+                            <thead>
+                              <tr className="bg-white/[0.03] border-b border-white/[0.08] text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+                                <th className="py-2.5 px-3">Course</th>
+                                <th className="py-2.5 px-3">Title</th>
+                                <th className="py-2.5 px-3 text-center">Credits</th>
+                                {mode === 'gpa' && <th className="py-2.5 px-3 text-right">Grade</th>}
+                                <th className="py-2.5 px-3 text-right">Semester</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.04]">
+                              {exportCompletedCourses.map((item, idx) => {
+                                const theme = getCategoryTheme(undefined, item.code);
+                                return (
+                                  <tr key={`${item.code}_${idx}`} className="hover:bg-white/[0.02]">
+                                    <td className="py-2 px-3">
+                                      <span className={`font-mono font-black text-xs px-2 py-0.5 rounded-lg border shadow-inner ${theme.codePill}`}>
+                                        {item.code}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-200 font-medium">{item.title}</td>
+                                    <td className="py-2 px-3 text-center">
+                                      <span className="font-mono text-[10px] text-slate-300 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded">
+                                        {item.credits} Cr
+                                      </span>
+                                    </td>
+                                    {mode === 'gpa' && (
+                                      <td className="py-2 px-3 font-bold font-mono text-emerald-400 text-right">
+                                        {item.grade}
+                                      </td>
+                                    )}
+                                    <td className="py-2 px-3 text-slate-400 text-right text-[11px] font-mono">{item.semesterName}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
                       );
-                    }
+                    })()}
+                  </div>
 
-                    return (
-                      <div className="w-full border border-slate-800/60 rounded-xl overflow-hidden bg-slate-900/40">
-                        <table className="w-full text-xs text-left border-collapse">
-                          <thead>
-                            <tr className="bg-white/5 border-b border-slate-800/60 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
-                              <th className="py-2.5 px-3">Course Code</th>
-                              <th className="py-2.5 px-3">Title</th>
-                              <th className="py-2.5 px-3 text-center">Credits</th>
-                              {mode === 'gpa' && <th className="py-2.5 px-3 text-right">Grade</th>}
-                              <th className="py-2.5 px-3 text-right">Semester</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {exportCompletedCourses.map((item, idx) => (
-                              <tr key={`${item.code}_${idx}`} className="hover:bg-white/[0.02]">
-                                <td className="py-2 px-3 font-bold text-indigo-300">{item.code}</td>
-                                <td className="py-2 px-3 text-slate-100 font-medium">{item.title}</td>
-                                <td className="py-2 px-3 text-slate-400 text-center font-semibold">{item.credits} Cr</td>
-                                {mode === 'gpa' && (
-                                  <td className="py-2 px-3 font-bold text-emerald-400 text-right">{item.grade}</td>
-                                )}
-                                <td className="py-2 px-3 text-slate-400 text-right text-[11px]">{item.semesterName}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* Section 4: Footer Watermark (Z-Index 10) */}
-                <div className="border-t border-slate-800/60 mt-4 pt-3 relative z-10 text-center">
-                  <p className="text-xs text-slate-400 font-medium leading-relaxed">
-                    <a 
-                      href="https://flow136-cse-course-tracker.vercel.app/" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-indigo-400 hover:text-indigo-300 underline font-semibold transition cursor-pointer"
-                    >
-                      Flow136
-                    </a> &bull; Your curriculum, minus the complexity.
-                  </p>
-                </div>
-              </div> {/* End flow136-grade-sheet-export-node */}
-            </div> {/* End scale-wrapper */}
-          </div> {/* End scrollable container */}
+                  {/* Section 4: Footer Watermark (Z-Index 10) */}
+                  <div className="border-t border-white/[0.08] mt-5 pt-3.5 relative z-10 flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-white font-bold">Flow136</span>
+                      <span>&bull; Your curriculum, minus the complexity.</span>
+                    </div>
+                    <div className="font-mono text-[10px] text-indigo-400 font-semibold">
+                      flow136-cse-course-tracker.vercel.app
+                    </div>
+                  </div>
+                </div> {/* End flow136-grade-sheet-export-node */}
+              </div> {/* End scale-wrapper */}
+            </div> {/* End scrollable container */}
 
             {/* Modal Footer Controls */}
-            <div className="pt-4 border-t border-slate-800/60 flex justify-end gap-3 no-print">
+            <div className="pt-3 border-t border-white/[0.08] flex justify-end gap-3 no-print">
               <button
                 onClick={() => setShowGradeSheetModal(false)}
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-slate-800/60 rounded-xl text-xs font-semibold text-slate-100 hover:text-slate-100 transition cursor-pointer"
+                className="px-5 py-2.5 bg-[#050508] hover:bg-[#0e0e14] border border-white/10 rounded-2xl text-xs font-bold text-slate-200 transition cursor-pointer"
               >
                 Close Preview
               </button>
@@ -4963,435 +5365,701 @@ export default function Home() {
         </div>
       )}
 
-      {/* Recommended Curriculum Roadmap Modal Overlay */}
-      {showRoadmapModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#09090b]/95 border border-slate-800 rounded-xl max-w-[95vw] md:max-w-6xl w-full max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(99,102,241,0.15)] relative overflow-hidden backdrop-blur-xl text-xs md:text-sm">
-            {/* Ambient glows inside modal */}
-            <div className="absolute top-[-10%] left-[-10%] w-[30%] h-[30%] rounded-full bg-indigo-500/10 blur-[80px] pointer-events-none" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] rounded-full bg-purple-500/10 blur-[80px] pointer-events-none" />
-            
-            {/* Header */}
-            <div className="px-4 md:px-6 py-4 border-b border-slate-800/85 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10 shrink-0 text-center sm:text-left">
-              <div className="flex flex-col sm:flex-row items-center gap-3 min-w-0">
-                <div className="h-9 w-9 rounded-lg border border-slate-800 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
-                  <HelpCircle className="h-5 w-5" />
+      {/* Recommended Curriculum Roadmap Modal Overlay ("Feeling Lost?") */}
+      {showRoadmapModal && (() => {
+        const q = roadmapSearch.toLowerCase().trim();
+        const matchCourse = (item: { code: string; title: string }) => 
+          !q || item.code.toLowerCase().includes(q) || item.title.toLowerCase().includes(q);
+
+        const DEPT_CORE = [
+          { code: "CSE110", title: "Programming Language I", credits: 3 },
+          { code: "CSE111", title: "Programming Language II", credits: 3 },
+          { code: "CSE220", title: "Data Structures", credits: 3 },
+          { code: "CSE221", title: "Algorithms", credits: 3 },
+          { code: "CSE230", title: "Discrete Mathematics", credits: 3 },
+          { code: "CSE250", title: "Circuits and Electronics", credits: 3 },
+          { code: "CSE251", title: "Electronic Devices and Circuits", credits: 3 },
+          { code: "CSE260", title: "Digital Logic Design", credits: 3 },
+          { code: "CSE320", title: "Data Communications", credits: 3 },
+          { code: "CSE321", title: "Operating Systems", credits: 3 },
+          { code: "CSE330", title: "Numerical Methods", credits: 3 },
+          { code: "CSE331", title: "Automata and Computability", credits: 3 },
+          { code: "CSE340", title: "Computer Architecture", credits: 3 },
+          { code: "CSE341", title: "Microprocessors", credits: 3 },
+          { code: "CSE350", title: "Digital Electronics and Pulse Techniques", credits: 3 },
+          { code: "CSE360", title: "Computer Interfacing", credits: 3 },
+          { code: "CSE370", title: "Database Systems", credits: 3 },
+          { code: "CSE420", title: "Compiler Design", credits: 3 },
+          { code: "CSE421", title: "Computer Networks", credits: 3 },
+          { code: "CSE422", title: "Artificial Intelligence", credits: 3 },
+          { code: "CSE423", title: "Computer Graphics", credits: 3 },
+          { code: "CSE460", title: "VLSI Design", credits: 3 },
+          { code: "CSE461", title: "Introduction to Robotics", credits: 3 },
+          { code: "CSE470", title: "Software Engineering", credits: 3 },
+          { code: "CSE471", title: "Systems Analysis and Design", credits: 3 },
+        ];
+
+        const CAPSTONE = [
+          { code: "CSE400", title: "Thesis / Internship / Final Project", credits: 4 }
+        ];
+
+        const CSE_ELECTIVES = [
+          { code: "CSE101", title: "Introduction to Computer Science", credits: 3 },
+          { code: "CSE310", title: "Object-Oriented Programming", credits: 3 },
+          { code: "CSE342", title: "Computer Systems Engineering", credits: 3 },
+          { code: "CSE371", title: "Management Information Systems", credits: 3 },
+          { code: "CSE390", title: "Technical Communication", credits: 3 },
+          { code: "CSE391", title: "Programming for the Internet", credits: 3 },
+          { code: "CSE392", title: "Signals and Systems", credits: 3 },
+          { code: "CSE410", title: "Advance Programming In UNIX", credits: 3 },
+          { code: "CSE419", title: "Programming Languages and Competitive Programming", credits: 3 },
+          { code: "CSE424", title: "Pattern Recognition", credits: 3 },
+          { code: "CSE425", title: "Neural Networks", credits: 3 },
+          { code: "CSE426", title: "Advanced Algorithms", credits: 3 },
+          { code: "CSE427", title: "Machine Learning", credits: 3 },
+          { code: "CSE428", title: "Image Processing", credits: 3 },
+          { code: "CSE429", title: "Basic Multimedia Theory", credits: 3 },
+          { code: "CSE430", title: "Digital Signal Processing", credits: 3 },
+          { code: "CSE431", title: "Natural Language Processing", credits: 3 },
+          { code: "CSE432", title: "Speech Recognition and Synthesis", credits: 3 },
+          { code: "CSE462", title: "Fault-Tolerant Systems", credits: 3 },
+          { code: "CSE472", title: "Human-Computer Interface", credits: 3 },
+          { code: "CSE473", title: "Financial Engineering & Technology", credits: 3 },
+          { code: "CSE474", title: "Simulation and Modeling", credits: 3 },
+          { code: "CSE490", title: "WAN Routing / Special Topics", credits: 3 },
+          { code: "CSE491", title: "Independent Study", credits: 3 }
+        ];
+
+        const BIL_COURSES = [
+          { code: "ENG091", title: "Foundation Course in English", credits: 0, isRemedial: true },
+          { code: "ENG101", title: "English Fundamentals", credits: 3, isRemedial: false },
+          { code: "ENG102", title: "English Composition I", credits: 3, isRemedial: false },
+          { code: "ENG103", title: "English Composition II", credits: 3, isRemedial: false }
+        ];
+
+        const MNS_COURSES = [
+          { code: "MAT092", title: "Intermediate Course in Mathematics", credits: 0, isRemedial: true },
+          { code: "MAT110", title: "Math I: Differential Calculus & Geometry", credits: 3, isRemedial: false },
+          { code: "PHY111", title: "Principles of Physics I", credits: 3, isRemedial: false },
+          { code: "STA201", title: "Elements of Statistics and Probability", credits: 3, isRemedial: false },
+          { code: "MAT120", title: "Math II: Integral Calculus & Differential Eq.", credits: 3, isRemedial: false },
+          { code: "MAT215", title: "Math III: Complex Variables & Laplace", credits: 3, isRemedial: false },
+          { code: "MAT216", title: "Math IV: Linear Algebra & Fourier Analysis", credits: 3, isRemedial: false },
+          { code: "PHY112", title: "Principles of Physics II", credits: 3, isRemedial: false }
+        ];
+
+        const TARC_COURSES = [
+          { code: "HUM103", title: "Ethics and Culture", credits: 3 },
+          { code: "BNG103", title: "Bangla Bhasha o Shahitto", credits: 3 },
+          { code: "EMB101", title: "Emergence of Bangladesh", credits: 3 }
+        ];
+
+        const GENED_STREAMS = [
+          {
+            stream: "Stream 2",
+            title: "Math & Natural Sciences",
+            badge: "bg-purple-500/15 border-purple-500/30 text-purple-300",
+            pill: "bg-[#0e0e14] border-purple-500/25 text-purple-200 hover:border-purple-500/50",
+            courses: ["BIO101","CHE101","ENV103","GSC110","MAT101","PHY101","STA101"]
+          },
+          {
+            stream: "Stream 3",
+            title: "Arts & Humanities",
+            badge: "bg-sky-500/15 border-sky-500/30 text-sky-300",
+            pill: "bg-[#0e0e14] border-sky-500/25 text-sky-200 hover:border-sky-500/50",
+            courses: ["ENG110","ENG113","ENG114","ENG115","ENG333","HST102","HST103","HST104","HUM101","HUM102","HUM207","HUM210","HUM301"]
+          },
+          {
+            stream: "Stream 4",
+            title: "Social Sciences",
+            badge: "bg-teal-500/15 border-teal-500/30 text-teal-300",
+            pill: "bg-[#0e0e14] border-teal-500/25 text-teal-200 hover:border-teal-500/50",
+            courses: ["ANT101","ANT342","ANT351","BUS102","BUS201","BUS333","BUS335","BU201","DEV104","DEV201","ECO101","ECO102","ECO105","POL101","POL102","POL103","POL201","POL202","POL203","POL210","PSY101","PSY102","SOC101","SOC201"]
+          },
+          {
+            stream: "Stream 5",
+            title: "Communities (CST)",
+            badge: "bg-rose-500/15 border-rose-500/30 text-rose-300",
+            pill: "bg-[#0e0e14] border-rose-500/25 text-rose-200 hover:border-rose-500/50",
+            courses: ["BUS334","CST201","CST204","CST301","CST302","CST303","CST304","CST305","CST306","CST307","CST308","CST309","CST310","CST314","CST333"]
+          }
+        ];
+
+        const filteredDeptCore = DEPT_CORE.filter(matchCourse);
+        const filteredCapstone = CAPSTONE.filter(matchCourse);
+        const filteredElectives = CSE_ELECTIVES.filter(matchCourse);
+        const filteredBil = BIL_COURSES.filter(matchCourse);
+        const filteredMns = MNS_COURSES.filter(matchCourse);
+        const filteredTarc = TARC_COURSES.filter(matchCourse);
+
+        const showDept = roadmapActiveTab === 'all' || roadmapActiveTab === 'dept';
+        const showOutside = roadmapActiveTab === 'all' || roadmapActiveTab === 'outside';
+        const showGened = roadmapActiveTab === 'all' || roadmapActiveTab === 'gened';
+
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
+            <div className="bg-[#08080d]/98 border border-white/[0.1] rounded-3xl max-w-[96vw] md:max-w-6xl w-full max-h-[94vh] flex flex-col shadow-2xl relative overflow-hidden backdrop-blur-xl text-xs md:text-sm">
+              {/* Ambient glows inside modal */}
+              <div className="absolute top-[-10%] left-[-10%] w-[35%] h-[35%] rounded-full bg-blue-500/10 blur-[90px] pointer-events-none" />
+              <div className="absolute bottom-[-10%] right-[-10%] w-[35%] h-[35%] rounded-full bg-indigo-500/10 blur-[90px] pointer-events-none" />
+              
+              {/* Header */}
+              <div className="px-4 sm:px-6 md:px-7 py-3.5 sm:py-4 border-b border-white/[0.08] flex items-center justify-between gap-3 relative z-10 shrink-0 bg-[#0e0e14]/50">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
+                    <Compass className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm sm:text-base font-black text-white tracking-tight leading-tight truncate">
+                      CSE Curriculum Roadmap &amp; Guide
+                    </h3>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5 font-bold truncate">
+                      FYAT Recommended 136-Credit Degree Distribution
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex flex-col items-center sm:items-start text-center sm:text-left">
-                  <h3 className="text-sm sm:text-base font-bold text-slate-100 leading-tight">Recommended Courses for CSE Curriculum</h3>
-                  <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wide mt-1">FYAT Recommended Course Roadmap Chart</p>
+                <button 
+                  onClick={() => {
+                    setShowRoadmapModal(false);
+                    setRoadmapSearch("");
+                  }}
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Segmented Filter Pills & Search Bar Strip */}
+              <div className="px-4 sm:px-6 md:px-7 py-2.5 sm:py-3 border-b border-white/[0.06] bg-[#050508]/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 relative z-10 shrink-0">
+                {/* Segmented Category Filter Pills */}
+                <div className="flex items-center gap-1 sm:gap-1.5 p-1 bg-[#0b0c14] border border-white/[0.08] rounded-2xl w-full sm:w-auto overflow-x-auto no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setRoadmapActiveTab('all')}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      roadmapActiveTab === 'all'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    All Modules (45)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoadmapActiveTab('dept')}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      roadmapActiveTab === 'dept'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0" />
+                    <span>Dept Core (25+2)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoadmapActiveTab('outside')}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      roadmapActiveTab === 'outside'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-cyan-400 shrink-0" />
+                    <span>Outside Dept</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoadmapActiveTab('gened')}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                      roadmapActiveTab === 'gened'
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-rose-400 shrink-0" />
+                    <span>GenEd Streams</span>
+                  </button>
+                </div>
+
+                {/* Instant Search Bar */}
+                <div className="relative w-full sm:w-64 shrink-0">
+                  <input
+                    type="text"
+                    placeholder="Search course code or title..."
+                    value={roadmapSearch}
+                    onChange={(e) => setRoadmapSearch(e.target.value)}
+                    className="w-full bg-[#08080d] border border-white/[0.1] hover:border-white/[0.2] text-xs pl-8 pr-7 py-2 rounded-xl text-slate-100 placeholder:text-slate-500 outline-none focus:border-indigo-400 transition shadow-inner font-medium"
+                  />
+                  <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  {roadmapSearch && (
+                    <button
+                      onClick={() => setRoadmapSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <button 
-                onClick={() => setShowRoadmapModal(false)}
-                className="absolute top-4 right-4 sm:relative sm:top-auto sm:right-auto h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800/40 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer shrink-0"
-              >
-                <X className="h-4.5 w-4.5" />
-              </button>
-            </div>
 
-            {/* Scrollable Modal Content */}
-            <div className="flex-grow overflow-auto p-4 md:p-6 relative z-10 custom-scrollbar">
-              <div className="min-w-0 md:min-w-[950px] space-y-6">
+              {/* Scrollable Modal Content */}
+              <div className="flex-grow overflow-auto p-3 sm:p-5 md:p-6 relative z-10 custom-scrollbar space-y-5 sm:space-y-6">
                 
-                {/* Stats Summary Header - CSE Curriculum */}
-                <div className="bg-zinc-900/60 border border-slate-800/60 rounded-xl p-4 flex flex-col gap-2">
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-slate-800/80 pb-2 text-center sm:text-left">
-                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">CSE Curriculum (136 Credits)</span>
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full font-semibold">132 Academic + 4 Non-Academic Credits</span>
+                {/* Stats Summary Bar */}
+                <div className="bg-[#0c0c14]/70 border border-white/[0.07] rounded-2xl p-3 sm:p-4 space-y-3 shadow-md">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 border-b border-white/[0.06] pb-2.5 sm:pb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-black text-white uppercase tracking-wider">
+                        CSE Curriculum Breakdown
+                      </span>
+                      <span className="text-[10px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-2.5 py-0.5 rounded-full font-bold">
+                        136 Credits Total
+                      </span>
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
+                      132 Academic + 4 Non-Academic Credits &bull; 45 Total Courses
+                    </span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 text-center">
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase">BIL</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">2 Courses</p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                    <div className="p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                        <span>Dept Core</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">25 Courses</span>
+                      <span className="text-[10px] text-slate-500 font-mono">75 Credits</span>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase">TARC (RS)</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">3 Courses</p>
+                    <div className="p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                        <span>Electives</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">2 Courses</span>
+                      <span className="text-[10px] text-slate-500 font-mono">6 Credits</span>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase">MNS</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">7 Courses</p>
+                    <div className="p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-purple-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                        <span>Capstone</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">1 Course</span>
+                      <span className="text-[10px] text-slate-500 font-mono">4 Credits</span>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase">COD (GenEd)</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">5 Courses</p>
+                    <div className="p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                        <span>MNS</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">7 Courses</span>
+                      <span className="text-[10px] text-slate-500 font-mono">21 Credits</span>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase">Dept Core</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">25 + 2 Elec</p>
+                    <div className="p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-rose-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                        <span>GenEd</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">5 Courses</span>
+                      <span className="text-[10px] text-slate-500 font-mono">15 Credits</span>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase leading-tight">Thesis / Internship / Final Project</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">1 Course</p>
+                    <div className="p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                        <span>TARC (RS)</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">3 Courses</span>
+                      <span className="text-[10px] text-slate-500 font-mono">9 Credits</span>
                     </div>
-                    <div className="bg-zinc-950/40 p-2 rounded-xl border border-slate-800/40">
-                      <p className="text-[10px] text-slate-400 uppercase">Total Courses</p>
-                      <p className="text-xs font-bold text-slate-100 mt-1">45</p>
+                    <div className="col-span-2 sm:col-span-1 p-2.5 rounded-xl bg-[#050508] border border-white/[0.06] flex flex-col items-center text-center">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                        <span>BIL (English)</span>
+                      </div>
+                      <span className="text-xs font-black text-white mt-1">2 Courses</span>
+                      <span className="text-[10px] text-slate-500 font-mono">6 Credits</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Main Split Table Layout */}
-                <div className="flex flex-col md:flex-row gap-0 items-stretch rounded-xl overflow-hidden border border-zinc-700/50 bg-zinc-900/60 shadow-lg">
+                {/* Section 1: Department Core (Program Core + Capstone) */}
+                {showDept && (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-black text-blue-300 bg-blue-500/15 border border-blue-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                          Program Core
+                        </span>
+                        <h4 className="font-extrabold text-xs sm:text-sm text-white">25 Mandatory Computing Courses</h4>
+                      </div>
+                      <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">75 Credits Total</span>
+                    </div>
 
-                  {/* ═══════════════════════════════════════════════
-                      LEFT SECTION: COURSE OUTSIDE DEPARTMENT
-                  ═══════════════════════════════════════════════ */}
-                  <div className="w-full md:w-[42%] shrink-0 flex flex-col border-b md:border-b-0 border-zinc-700/50">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {filteredDeptCore.map((c) => (
+                        <div 
+                          key={c.code}
+                          className="p-3 rounded-2xl bg-[#07070c] border border-white/[0.07] hover:border-blue-500/40 hover:bg-[#0c0c16] transition-all flex items-center justify-between gap-2.5 group shadow-sm"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="font-mono font-black text-xs text-blue-300 bg-blue-950/40 border border-blue-500/30 px-2 py-0.5 rounded-lg shadow-inner shrink-0">
+                              {c.code}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-200 group-hover:text-white truncate transition-colors">
+                              {c.title}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded-md shrink-0">
+                            {c.credits} Cr
+                          </span>
+                        </div>
+                      ))}
+                    </div>
 
-                    {/* Section Header Band */}
-                    <div className="px-4 py-2.5 bg-indigo-950/60 border-b-2 border-indigo-600/40 md:border-r border-zinc-700/50">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="h-px flex-1 bg-indigo-600/30" />
-                        <h4 className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-[0.15em] whitespace-nowrap">
-                          Course Outside Department
-                        </h4>
-                        <div className="h-px flex-1 bg-indigo-600/30" />
+                    {/* Capstone */}
+                    <div className="pt-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-black text-purple-300 bg-purple-500/15 border border-purple-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                            Capstone
+                          </span>
+                          <h4 className="font-extrabold text-xs sm:text-sm text-white">Graduation Milestone</h4>
+                        </div>
+                        <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">4 Credits</span>
+                      </div>
+
+                      <div className="mt-2.5">
+                        {filteredCapstone.map((c) => (
+                          <div 
+                            key={c.code}
+                            className="p-3.5 rounded-2xl bg-[#090712] border border-purple-500/30 hover:border-purple-500/60 transition-all flex items-center justify-between gap-3 group shadow-sm"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-black text-xs text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded-lg shadow-inner shrink-0">
+                                {c.code}
+                              </span>
+                              <span className="text-xs font-bold text-slate-100 group-hover:text-white truncate">
+                                {c.title}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-mono font-bold text-purple-300 bg-purple-500/10 border border-purple-500/25 px-2 py-0.5 rounded-md shrink-0">
+                              4 Credits
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="p-3 space-y-2.5 md:border-r border-zinc-700/50 flex-1">
-
-                      {/* BIL Section */}
-                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
-                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                          BIL — Brac Institute of Languages
+                    {/* CSE Major Electives */}
+                    <div className="pt-2 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-black text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                            CSE Major Electives
+                          </span>
+                          <h4 className="font-extrabold text-xs sm:text-sm text-white">
+                            Select 2 Courses <span className="text-slate-400 font-normal text-[11px] sm:text-xs">(from 24 Available)</span>
+                          </h4>
                         </div>
-                        <table className="w-full text-left text-xs border-collapse">
-                          <tbody>
-                            <tr className="border-b border-slate-800/60 bg-amber-500/10">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">ENG091</td>
-                              <td className="p-1.5 text-amber-200/80 text-[11px]">{COURSES.find(c => c.code === "ENG091")?.title} <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">ENG101</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "ENG101")?.title}</td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">ENG102</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "ENG102")?.title}</td>
-                            </tr>
-                            <tr>
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">ENG103</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "ENG103")?.title}</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                        <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">6 Credits Required</span>
                       </div>
 
-                      {/* MNS I Section */}
-                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
-                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                          MNS I — Math &amp; Natural Sciences
-                        </div>
-                        <table className="w-full text-left text-xs border-collapse">
-                          <tbody>
-                            <tr className="border-b border-slate-800/60 bg-amber-500/10">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-amber-300 w-16 text-center text-[11px]">MAT092</td>
-                              <td className="p-1.5 text-amber-200/80 text-[11px]">{COURSES.find(c => c.code === "MAT092")?.title} <span className="text-amber-500/70 text-[9px]">(Non-Credit)</span></td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT110</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT110")?.title}</td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">PHY111</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "PHY111")?.title}</td>
-                            </tr>
-                            <tr>
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">STA201</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "STA201")?.title}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* TARC Section */}
-                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
-                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                          TARC — Residential Semester (RS)
-                        </div>
-                        <table className="w-full text-left text-xs border-collapse">
-                          <tbody>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">HUM103</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "HUM103")?.title}</td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">BNG103</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "BNG103")?.title}</td>
-                            </tr>
-                            <tr>
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">EMB101</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "EMB101")?.title}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* MNS II Section */}
-                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
-                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                          MNS II — Additional Math &amp; Sciences
-                        </div>
-                        <table className="w-full text-left text-xs border-collapse">
-                          <tbody>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT120</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT120")?.title}</td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT215</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT215")?.title}</td>
-                            </tr>
-                            <tr className="border-b border-slate-800/60">
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">MAT216</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "MAT216")?.title}</td>
-                            </tr>
-                            <tr>
-                              <td className="p-1.5 border-r border-slate-800/60 font-bold font-mono text-slate-100 w-16 text-center text-[11px]">PHY112</td>
-                              <td className="p-1.5 text-slate-400 text-[11px]">{COURSES.find(c => c.code === "PHY112")?.title}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* COD — GenEd Streams */}
-                      <div className="border border-indigo-500/15 rounded-xl overflow-hidden bg-zinc-950/50">
-                        <div className="bg-indigo-950/60 px-3 py-1 border-b border-indigo-500/15 text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                          COD — GenEd Electives (5 courses needed)
-                        </div>
-                        <div className="divide-y divide-zinc-900/60">
-                          {/* Stream 2 */}
-                          <div className="px-2.5 py-1.5">
-                            <p className="text-[9px] font-bold text-purple-400 uppercase tracking-wider mb-1">Stream 2 — Math &amp; Natural Sciences</p>
-                            <div className="flex flex-wrap gap-1">
-                              {["BIO101","CHE101","ENV103","GSC110","MAT101","PHY101","STA101"].map(c => (
-                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-slate-800 text-purple-200/80 px-1.5 py-0.5 rounded">{c}</span>
-                              ))}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {filteredElectives.map((c) => (
+                          <div 
+                            key={c.code}
+                            className="p-3 rounded-2xl bg-[#07070c] border border-white/[0.07] hover:border-amber-500/40 hover:bg-[#0c0c16] transition-all flex items-center justify-between gap-2.5 group shadow-sm"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-black text-xs text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded-lg shadow-inner shrink-0">
+                                {c.code}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-200 group-hover:text-white truncate transition-colors">
+                                {c.title}
+                              </span>
                             </div>
+                            <span className="text-[10px] font-mono text-slate-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded-md shrink-0">
+                              {c.credits} Cr
+                            </span>
                           </div>
-                          {/* Stream 3 */}
-                          <div className="px-2.5 py-1.5">
-                            <p className="text-[9px] font-bold text-sky-400 uppercase tracking-wider mb-1">Stream 3 — Arts &amp; Humanities</p>
-                            <div className="flex flex-wrap gap-1">
-                              {["ENG110","ENG113","ENG114","ENG115","ENG333","HST102","HST103","HST104","HUM101","HUM102","HUM207","HUM210","HUM301"].map(c => (
-                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-sky-500/20 text-sky-200/80 px-1.5 py-0.5 rounded">{c}</span>
-                              ))}
-                            </div>
-                          </div>
-                          {/* Stream 4 */}
-                          <div className="px-2.5 py-1.5">
-                            <p className="text-[9px] font-bold text-teal-400 uppercase tracking-wider mb-1">Stream 4 — Social Sciences</p>
-                            <div className="flex flex-wrap gap-1">
-                              {["ANT101","ANT342","ANT351","BUS102","BUS201","BUS333","BUS335","BU201","DEV104","DEV201","ECO101","ECO102","ECO105","POL101","POL102","POL103","POL201","POL202","POL203","POL210","PSY101","PSY102","SOC101","SOC201"].map(c => (
-                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-teal-500/20 text-teal-200/80 px-1.5 py-0.5 rounded">{c}</span>
-                              ))}
-                            </div>
-                          </div>
-                          {/* Stream 5 */}
-                          <div className="px-2.5 py-1.5">
-                            <p className="text-[9px] font-bold text-rose-400 uppercase tracking-wider mb-1">Stream 5 — Communities (CST)</p>
-                            <div className="flex flex-wrap gap-1">
-                              {["BUS334","CST201","CST204","CST301","CST302","CST303","CST304","CST305","CST306","CST307","CST308","CST309","CST310","CST314","CST333"].map(c => (
-                                <span key={c} className="font-mono text-[10px] bg-zinc-900 border border-rose-500/20 text-rose-200/80 px-1.5 py-0.5 rounded">{c}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-
                     </div>
                   </div>
+                )}
 
-                  {/* ═══ Vertical Section Divider ═══ */}
-                  <div className="hidden md:block w-[3px] self-stretch bg-gradient-to-b from-indigo-600/0 via-zinc-600/60 to-indigo-600/0 shrink-0" />
+                {/* Section 2: Outside Department (MNS, BIL, RS) */}
+                {showOutside && (
+                  <div className="space-y-5">
+                    {/* MNS Math & Natural Sciences */}
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-black text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                            MNS
+                          </span>
+                          <h4 className="font-extrabold text-xs sm:text-sm text-white">
+                            Mathematics &amp; Natural Sciences <span className="text-slate-400 font-normal text-[11px] sm:text-xs">(7 Courses)</span>
+                          </h4>
+                        </div>
+                        <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">21 Academic Credits</span>
+                      </div>
 
-                  {/* ═══════════════════════════════════════════════
-                      RIGHT SECTION: DEPARTMENT CORE
-                  ═══════════════════════════════════════════════ */}
-                  <div className="flex-1 flex flex-col">
-
-                    {/* Section Header Band */}
-                    <div className="px-4 py-2.5 bg-emerald-950/40 border-b-2 border-emerald-600/40">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="h-px flex-1 bg-emerald-600/30" />
-                        <h4 className="text-[10px] font-extrabold text-emerald-300 uppercase tracking-[0.15em] whitespace-nowrap">
-                          Department Core
-                        </h4>
-                        <div className="h-px flex-1 bg-emerald-600/30" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {filteredMns.map((c) => (
+                          <div 
+                            key={c.code}
+                            className="p-3 rounded-2xl bg-[#07070c] border border-white/[0.07] hover:border-cyan-500/40 hover:bg-[#0c0c16] transition-all flex items-center justify-between gap-2.5 group shadow-sm"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-black text-xs text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-lg shadow-inner shrink-0">
+                                {c.code}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-200 group-hover:text-white truncate transition-colors">
+                                {c.title}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {c.isRemedial && (
+                                <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md uppercase">
+                                  Non-Credit
+                                </span>
+                              )}
+                              <span className="text-[10px] font-mono text-slate-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded-md">
+                                {c.credits} Cr
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="p-3">
-                      <div className="border border-slate-800/40 rounded-xl overflow-hidden bg-zinc-950/40">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b-2 border-slate-800/80 text-[10px] uppercase font-bold">
-                              <th colSpan={2} className="p-1.5 border-r-2 border-zinc-700/60 text-center bg-emerald-950/50 text-emerald-400 tracking-wider">
-                                Program Core (25 Courses)
-                              </th>
-                              <th colSpan={2} className="p-1.5 text-center bg-amber-950/40 text-amber-400 tracking-wider">
-                                CSE Electives (24 Courses)
-                              </th>
-                            </tr>
-                            <tr className="border-b border-slate-800/60 text-[9px] uppercase font-semibold">
-                              <th className="p-1.5 border-r border-slate-800/60 w-[13%] text-center bg-emerald-950/30 text-emerald-500">Code</th>
-                              <th className="p-1.5 border-r-2 border-zinc-700/60 bg-emerald-950/30 text-emerald-500">Course Name</th>
-                              <th className="p-1.5 border-r border-slate-800/60 w-[13%] text-center bg-amber-950/30 text-amber-500">Code</th>
-                              <th className="p-1.5 bg-amber-950/30 text-amber-500">Course Name</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {[
-                              { c1: "CSE110", n1: "Programming Language I",             c2: "CSE101", n2: "Introduction to Computer Science" },
-                              { c1: "CSE111", n1: "Programming Language II",            c2: "CSE310", n2: "Object-Oriented Programming" },
-                              { c1: "CSE220", n1: "Data Structures",                    c2: "CSE342", n2: "Computer Systems Engineering" },
-                              { c1: "CSE221", n1: "Algorithms",                         c2: "CSE371", n2: "Management Information Systems" },
-                              { c1: "CSE230", n1: "Discrete Mathematics",               c2: "CSE390", n2: "Technical Communication" },
-                              { c1: "CSE250", n1: "Circuits and Electronics",           c2: "CSE391", n2: "Programming for the Internet" },
-                              { c1: "CSE251", n1: "Electronic Devices and Circuits",    c2: "CSE392", n2: "Signals and Systems" },
-                              { c1: "CSE260", n1: "Digital Logic Design",               c2: "CSE410", n2: "Advance Programming In UNIX" },
-                              { c1: "CSE320", n1: "Data Communications",                c2: "CSE419", n2: "Programming Languages and Competitive Programming" },
-                              { c1: "CSE321", n1: "Operating Systems",                  c2: "CSE424", n2: "Pattern Recognition" },
-                              { c1: "CSE330", n1: "Numerical Methods",                  c2: "CSE425", n2: "Neural Networks" },
-                              { c1: "CSE331", n1: "Automata and Computability",         c2: "CSE426", n2: "Advanced Algorithms" },
-                              { c1: "CSE340", n1: "Computer Architecture",              c2: "CSE427", n2: "Machine Learning" },
-                              { c1: "CSE341", n1: "Microprocessors",                    c2: "CSE428", n2: "Image Processing" },
-                              { c1: "CSE350", n1: "Digital Electronics and Pulse Techniques", c2: "CSE429", n2: "Basic Multimedia Theory" },
-                              { c1: "CSE360", n1: "Computer Interfacing",               c2: "CSE430", n2: "Digital Signal Processing" },
-                              { c1: "CSE370", n1: "Database Systems",                   c2: "CSE431", n2: "Natural Language Processing" },
-                              { c1: "CSE420", n1: "Compiler Design",                    c2: "CSE432", n2: "Speech Recognition and Synthesis" },
-                              { c1: "CSE421", n1: "Computer Networks",                  c2: "CSE462", n2: "Fault-Tolerant Systems" },
-                              { c1: "CSE422", n1: "Artificial Intelligence",            c2: "CSE472", n2: "Human-Computer Interface" },
-                              { c1: "CSE423", n1: "Computer Graphics",                  c2: "CSE473", n2: "Financial Engineering & Technology" },
-                              { c1: "CSE460", n1: "VLSI Design",                        c2: "CSE474", n2: "Simulation and Modeling" },
-                              { c1: "CSE461", n1: "Introduction to Robotics",           c2: "CSE490", n2: "WAN Routing / Special Topics" },
-                              { c1: "CSE470", n1: "Software Engineering",               c2: "CSE491", n2: "Independent Study" },
-                              { c1: "CSE471", n1: "Systems Analysis and Design",        c2: "",       n2: "" },
-                              { c1: "CSE400", n1: "Thesis / Internship / Final Project (4 Cr)", c2: "",       n2: "" },
-                            ].map((row, index) => {
-                              const programCore = [
-                                "CSE110","CSE111","CSE220","CSE221","CSE230","CSE250","CSE251","CSE260",
-                                "CSE320","CSE321","CSE330","CSE331","CSE340","CSE341","CSE350","CSE360",
-                                "CSE370","CSE420","CSE421","CSE422","CSE423","CSE460","CSE461","CSE470",
-                                "CSE471"
-                              ];
-                              const electives = [
-                                "CSE101","CSE310","CSE342","CSE371","CSE390","CSE391","CSE392","CSE410",
-                                "CSE419","CSE424","CSE425","CSE426","CSE427","CSE428","CSE429","CSE430",
-                                "CSE431","CSE432","CSE462","CSE472","CSE473","CSE474","CSE490","CSE491"
-                              ];
-                              const isCore1 = programCore.includes(row.c1);
-                              const isElect2 = electives.includes(row.c2);
-                              const isThesis1 = row.c1 === "CSE400";
+                    {/* BIL Languages */}
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-black text-sky-300 bg-sky-500/15 border border-sky-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                            BIL
+                          </span>
+                          <h4 className="font-extrabold text-xs sm:text-sm text-white">
+                            Brac Institute of Languages <span className="text-slate-400 font-normal text-[11px] sm:text-xs">(2 Courses Needed)</span>
+                          </h4>
+                        </div>
+                        <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">6 Academic Credits</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {filteredBil.map((c) => (
+                          <div 
+                            key={c.code}
+                            className="p-3 rounded-2xl bg-[#07070c] border border-white/[0.07] hover:border-sky-500/40 hover:bg-[#0c0c16] transition-all flex items-center justify-between gap-2.5 group shadow-sm"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-black text-xs text-sky-300 bg-sky-950/40 border border-sky-500/30 px-2 py-0.5 rounded-lg shadow-inner shrink-0">
+                                {c.code}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-200 group-hover:text-white truncate transition-colors">
+                                {c.title}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {c.isRemedial && (
+                                <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-md uppercase">
+                                  Non-Credit
+                                </span>
+                              )}
+                              <span className="text-[10px] font-mono text-slate-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded-md">
+                                {c.credits} Cr
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* TARC Residential Semester */}
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-black text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                            TARC (RS)
+                          </span>
+                          <h4 className="font-extrabold text-xs sm:text-sm text-white">
+                            Residential Semester <span className="text-slate-400 font-normal text-[11px] sm:text-xs">(3 Courses Mandatory)</span>
+                          </h4>
+                        </div>
+                        <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">9 Academic Credits</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {filteredTarc.map((c) => (
+                          <div 
+                            key={c.code}
+                            className="p-3 rounded-2xl bg-[#07070c] border border-white/[0.07] hover:border-indigo-500/40 hover:bg-[#0c0c16] transition-all flex items-center justify-between gap-2.5 group shadow-sm"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-black text-xs text-indigo-300 bg-indigo-950/40 border border-indigo-500/30 px-2 py-0.5 rounded-lg shadow-inner shrink-0">
+                                {c.code}
+                              </span>
+                              <span className="text-xs font-semibold text-slate-200 group-hover:text-white truncate transition-colors">
+                                {c.title}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded-md shrink-0">
+                              {c.credits} Cr
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 3: COD GenEd Electives */}
+                {showGened && (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 pb-2.5 border-b border-white/[0.06]">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-black text-rose-300 bg-rose-500/15 border border-rose-500/30 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shrink-0">
+                          COD
+                        </span>
+                        <h4 className="font-extrabold text-xs sm:text-sm text-white">
+                          General Education Streams <span className="text-slate-400 font-normal text-[11px] sm:text-xs">(5 Courses Required)</span>
+                        </h4>
+                      </div>
+                      <span className="text-[11px] sm:text-xs text-slate-400 font-mono font-semibold shrink-0">15 Academic Credits</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {GENED_STREAMS.map((st) => (
+                        <div 
+                          key={st.stream}
+                          className="p-4 rounded-2xl bg-[#07070c] border border-white/[0.07] space-y-3"
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-white/[0.05] pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-lg border ${st.badge}`}>
+                                {st.stream}
+                              </span>
+                              <h5 className="font-bold text-xs text-white">{st.title}</h5>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {st.courses.length} options
+                            </span>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                            {st.courses.map((code) => {
+                              const detail = COURSES.find(co => co.code === code);
+                              const isHighlight = q && (code.toLowerCase().includes(q) || (detail && detail.title.toLowerCase().includes(q)));
                               return (
-                                <tr key={index} className="border-b border-slate-800/60 last:border-0">
-                                  <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${
-                                    isThesis1 
-                                      ? 'bg-purple-950/40 text-purple-300' 
-                                      : isCore1 
-                                        ? 'bg-emerald-950/40 text-emerald-300' 
-                                        : 'text-slate-100'
-                                  }`}>
-                                    {row.c1 || ""}
-                                  </td>
-                                  <td className={`p-1.5 border-r-2 border-zinc-700/60 text-[11px] ${
-                                    isThesis1 
-                                      ? 'bg-purple-950/20 text-purple-100/90' 
-                                      : isCore1 
-                                        ? 'bg-emerald-950/20 text-emerald-100/90' 
-                                        : 'text-slate-400'
-                                  }`}>
-                                    {row.n1}
-                                  </td>
-                                  <td className={`p-1.5 border-r border-slate-800/60 font-mono font-bold text-center text-[11px] ${isElect2 ? 'bg-amber-950/40 text-amber-300' : 'text-slate-400'}`}>
-                                    {row.c2 || ""}
-                                  </td>
-                                  <td className={`p-1.5 text-[11px] ${isElect2 ? 'bg-amber-950/20 text-amber-100/90' : 'text-slate-400'}`}>
-                                    {row.n2}
-                                  </td>
-                                </tr>
+                                <span
+                                  key={code}
+                                  title={detail ? `${code}: ${detail.title} (${detail.credits} Cr)` : code}
+                                  className={`font-mono text-[10px] font-bold px-2 py-1 rounded-lg border transition-all cursor-help select-none ${
+                                    isHighlight
+                                      ? 'bg-amber-500/20 border-amber-400 text-amber-200 scale-105 shadow-sm'
+                                      : st.pill
+                                  }`}
+                                >
+                                  {code}
+                                </span>
                               );
                             })}
-                          </tbody>
-                        </table>
-                      </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
+                )}
 
-                </div>
-
-                {/* GenEd Help Link Section */}
-                <div className="bg-zinc-900/40 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 text-center sm:text-left">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-indigo-400 animate-pulse shrink-0" />
-                    <p className="text-xs text-slate-100 font-medium">
-                      Need more help understanding the GenEd streams?
-                    </p>
+                {/* GenEd Guidelines Link Banner */}
+                <div className="bg-[#0e0e14]/60 border border-white/[0.08] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mt-2 text-center sm:text-left">
+                  <div className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-100 font-bold">
+                        Need official clarification on GenEd stream rules?
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Check prerequisites and eligible courses directly on the university website.
+                      </p>
+                    </div>
                   </div>
                   <a
                     href="https://www.bracu.ac.bd/avilable-program/general-education-gened"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 border border-slate-800 text-indigo-300 hover:text-slate-100 text-xs font-bold rounded-xl transition shadow-[0_0_15px_rgba(99,102,241,0.15)] hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:scale-[1.02] active:scale-98 cursor-pointer w-full sm:w-auto"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer shrink-0"
                   >
-                    <span>View the Official BRACU GenEd Guidelines</span>
+                    <span>Official GenEd Guidelines</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 </div>
 
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-800/80 bg-zinc-950/60 flex flex-col md:flex-row items-center justify-between gap-3 text-[10px] text-slate-400 shrink-0 relative z-10 text-center md:text-left">
-              <span className="font-bold uppercase tracking-wider text-indigo-400/80">
-                Guideline for CSE Curriculum
-              </span>
-              <span className="flex flex-wrap items-center justify-center gap-3">
-                <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Green = Program Core
-                </span>
-                <span className="font-semibold text-amber-400 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  Amber = CSE Electives
-                </span>
-                <span className="font-semibold text-purple-400 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-purple-500" />
-                  Purple = CSE400
-                </span>
-              </span>
-              <span className="text-slate-400 text-center md:text-right max-w-xs">
-                Created By <strong className="text-slate-100">Badhon Nandi</strong>, MENTOR (FYAT)<br />
-                Office of Academic Advising(OAA), Brac University
-              </span>
-            </div>
+              {/* Modal Footer with Attribution & Category Guide */}
+              <div className="px-4 sm:px-6 py-3 border-t border-white/[0.08] bg-[#050508] flex flex-col md:flex-row items-center justify-between gap-3 text-[10px] text-slate-400 shrink-0 relative z-10 text-center md:text-left">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 sm:gap-3">
+                  <span className="font-black uppercase tracking-wider text-indigo-400 shrink-0">
+                    Category Guide:
+                  </span>
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 sm:gap-2.5">
+                    <span className="font-bold text-blue-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                      Program Core
+                    </span>
+                    <span className="font-bold text-amber-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      Electives
+                    </span>
+                    <span className="font-bold text-purple-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                      Capstone
+                    </span>
+                    <span className="font-bold text-cyan-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
+                      MNS
+                    </span>
+                    <span className="font-bold text-sky-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+                      BIL
+                    </span>
+                    <span className="font-bold text-indigo-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                      RS
+                    </span>
+                    <span className="font-bold text-rose-400 flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                      GenEd
+                    </span>
+                  </div>
+                </div>
 
+                <div className="text-slate-400 text-center md:text-right text-[10px]">
+                  Curriculum Guideline by <strong className="text-slate-200">Badhon Nandi</strong> (FYAT Mentor), OAA Brac University
+                </div>
+              </div>
+
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Repeat ROI Analyzer Dedicated Popup Modal */}
       {showRoiModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
-          <div className="bg-zinc-950 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-[#08080d]/98 border border-slate-700/80 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-zinc-900/40">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.2)] shrink-0">
+            <div className="p-5 border-b border-slate-800/80 flex items-center justify-between bg-[#0e0e14]/40">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
                   <Repeat className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-100">Repeat ROI Analyzer</h3>
-                  <p className="text-[11px] text-slate-400">Simulate grade improvements, retake scenarios & CGPA impact</p>
+                  <h3 className="text-base font-extrabold text-white tracking-tight">Repeat ROI Analyzer</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Simulate grade improvements, retake scenarios &amp; CGPA impact</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -5399,7 +6067,7 @@ export default function Home() {
                   type="button"
                   onClick={() => setShowGradingSystemModal(true)}
                   title="View Official University Grading Scale"
-                  className="text-indigo-300 hover:text-indigo-200 text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 px-3 py-1.5 rounded-xl border border-indigo-500/30 flex items-center gap-1.5 transition cursor-pointer"
+                  className="text-indigo-300 hover:text-indigo-200 text-xs font-bold bg-indigo-500/15 hover:bg-indigo-500/25 px-3.5 py-2 rounded-2xl border border-indigo-500/30 flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <Award className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Grading System</span>
@@ -5407,7 +6075,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => setShowRoiModal(false)}
-                  className="h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
+                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -5415,9 +6083,9 @@ export default function Home() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar space-y-4">
+            <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar space-y-4">
               {/* Threshold Filter Bar */}
-              <div className="p-3.5 rounded-xl bg-zinc-900/50 border border-slate-800/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-4 rounded-2xl bg-[#0e0e14]/60 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-slate-300">
                     Detect courses with grade ≤
@@ -5425,7 +6093,7 @@ export default function Home() {
                   <select
                     value={roiThresholdGrade}
                     onChange={(e) => setRoiThresholdGrade(e.target.value)}
-                    className="text-xs font-bold bg-zinc-950 text-indigo-300 border border-indigo-500/40 rounded-lg px-2.5 py-1 focus:outline-none focus:border-indigo-400 cursor-pointer shadow-inner"
+                    className="text-xs font-bold bg-[#050508] text-indigo-300 border border-slate-700/80 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-400 cursor-pointer shadow-inner"
                   >
                     <option value="B-">B- (2.7) — Standard Policy</option>
                     <option value="B">B (3.0)</option>
@@ -5441,7 +6109,7 @@ export default function Home() {
                   </select>
                 </div>
 
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-300 text-[10px] font-semibold self-start sm:self-auto">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[10px] font-bold self-start sm:self-auto">
                   <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse shrink-0" />
                   <span>F grades always included</span>
                 </div>
@@ -5449,25 +6117,25 @@ export default function Home() {
 
               {/* Combined Multi-Course Simulation Banner */}
               {roiAnalysis.combinedSelectedCount > 0 ? (
-                <div className={`p-4 rounded-xl border transition-all duration-300 ${
+                <div className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 ${
                   roiAnalysis.combinedDelta > 0
-                    ? 'bg-gradient-to-r from-emerald-950/30 to-zinc-900/50 border-emerald-500/30 text-emerald-300'
+                    ? 'bg-gradient-to-r from-emerald-950/30 to-[#0e0e14]/60 border-emerald-500/30 text-emerald-300'
                     : roiAnalysis.combinedDelta < 0
-                      ? 'bg-gradient-to-r from-rose-950/30 to-zinc-900/50 border-rose-500/30 text-rose-300'
-                      : 'bg-zinc-900/60 border-slate-800 text-slate-300'
+                      ? 'bg-gradient-to-r from-rose-950/30 to-[#0e0e14]/60 border-rose-500/30 text-rose-300'
+                      : 'bg-[#0e0e14]/60 border-slate-800 text-slate-300'
                 }`}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 font-bold text-sm">
                       {roiAnalysis.combinedDelta > 0 ? (
-                        <div className="h-6 w-6 rounded-md bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                        <div className="h-6 w-6 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                           <TrendingUp className="h-4 w-4" />
                         </div>
                       ) : roiAnalysis.combinedDelta < 0 ? (
-                        <div className="h-6 w-6 rounded-md bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                        <div className="h-6 w-6 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
                           <TrendingDown className="h-4 w-4" />
                         </div>
                       ) : (
-                        <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-slate-400 shrink-0">
+                        <div className="h-6 w-6 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
                           <Target className="h-4 w-4" />
                         </div>
                       )}
@@ -5480,7 +6148,7 @@ export default function Home() {
                         ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                         : roiAnalysis.combinedDelta < 0
                           ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
-                          : 'bg-zinc-800 border-slate-700 text-slate-300'
+                          : 'bg-slate-800 border-slate-700 text-slate-300'
                     }`}>
                       {roiAnalysis.combinedDelta > 0 ? `+${roiAnalysis.combinedDelta.toFixed(3)}` : roiAnalysis.combinedDelta.toFixed(3)} CGPA
                     </span>
@@ -5488,8 +6156,8 @@ export default function Home() {
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs pt-2 border-t border-white/5">
                     <span className="text-slate-300">
-                      Current: <strong className="text-slate-100 font-mono">{roiAnalysis.currentCgpa.toFixed(2)}</strong> → Projected: <strong className={`font-mono ${
-                        roiAnalysis.combinedDelta > 0 ? 'text-emerald-300 font-bold' : roiAnalysis.combinedDelta < 0 ? 'text-rose-300 font-bold' : 'text-slate-100'
+                      Current: <strong className="text-white font-mono">{roiAnalysis.currentCgpa.toFixed(2)}</strong> → Projected: <strong className={`font-mono ${
+                        roiAnalysis.combinedDelta > 0 ? 'text-emerald-300 font-bold' : roiAnalysis.combinedDelta < 0 ? 'text-rose-300 font-bold' : 'text-white'
                       }`}>{roiAnalysis.combinedNewCgpa.toFixed(2)}</strong>
                     </span>
                     <span className="text-[11px] text-slate-400">
@@ -5502,7 +6170,7 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <div className="p-3.5 rounded-xl border border-dashed border-slate-800 text-center text-xs text-slate-400">
+                <div className="p-4 rounded-2xl border border-dashed border-slate-800/80 text-center text-xs text-slate-400 bg-[#0e0e14]/30">
                   Select one or more courses below using the checkboxes to calculate combined repeat impact.
                 </div>
               )}
@@ -5553,20 +6221,20 @@ export default function Home() {
 
               {/* Course Cards List */}
               {roiAnalysis.candidates.length === 0 ? (
-                <div className="p-8 rounded-2xl border border-slate-800/80 bg-zinc-900/20 text-center space-y-3">
-                  <div className="h-10 w-10 rounded-xl bg-slate-800/40 flex items-center justify-center text-slate-400 mx-auto">
-                    <Check className="h-5 w-5 text-emerald-400" />
+                <div className="p-8 rounded-3xl border border-slate-800/80 bg-[#0e0e14]/30 text-center space-y-3">
+                  <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto">
+                    <Check className="h-5 w-5" />
                   </div>
-                  <p className="text-xs text-slate-300 font-medium">
+                  <p className="text-xs text-slate-200 font-medium">
                     No courses found with grade ≤ {roiThresholdGrade} (or F).
                   </p>
-                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
                     You have no poor performing courses under this threshold. You can raise the threshold to include courses with higher grades.
                   </p>
                   <button
                     type="button"
                     onClick={() => setRoiThresholdGrade('all')}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 rounded-lg text-xs font-bold transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 rounded-xl text-xs font-bold transition cursor-pointer"
                   >
                     <span>Show All Gradable Courses (&lt; 4.0)</span>
                   </button>
@@ -5581,38 +6249,45 @@ export default function Home() {
                     return (
                       <div 
                         key={item.code} 
-                        className={`p-3.5 rounded-xl border transition-all ${
+                        className={`p-4 rounded-2xl border transition-all ${
                           isSelected 
-                            ? 'bg-zinc-900/70 border-slate-700/90 shadow-md' 
-                            : 'bg-zinc-950/40 border-slate-800/40 opacity-75 hover:opacity-100'
+                            ? 'bg-[#12121c]/80 border-indigo-500/40 shadow-md' 
+                            : 'bg-[#0e0e14]/40 border-slate-800/60 opacity-80 hover:opacity-100 hover:bg-[#0e0e14]/70'
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2.5">
                           {/* Course info & Checkbox */}
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
+                          <div className="flex items-center gap-3 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => {
                                 setSelectedRoiCourses(prev => ({
                                   ...prev,
-                                  [item.code]: e.target.checked
+                                  [item.code]: !isSelected
                                 }));
                               }}
-                              className="h-4 w-4 rounded border-slate-700 bg-zinc-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer shrink-0"
+                              className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus:outline-none ${
+                                isSelected
+                                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-transparent shadow-[0_0_8px_rgba(99,102,241,0.5)]'
+                                  : 'border-white/20 bg-white/[0.03] hover:border-white/40'
+                              }`}
                               title="Include in combined repeat calculation"
-                            />
+                            >
+                              {isSelected && (
+                                <Check className="h-3 w-3 text-white stroke-[3]" />
+                              )}
+                            </button>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm text-slate-100">{item.code}</span>
-                                <span className="text-[11px] text-slate-400 font-semibold">({item.credits} Cr)</span>
+                                <span className="font-mono font-black text-sm text-white bg-[#060609] border border-slate-700/80 px-2 py-0.5 rounded-lg shadow-inner">{item.code}</span>
+                                <span className="text-[11px] text-slate-400 font-semibold font-mono">({item.credits} Cr)</span>
                                 {item.isF && (
-                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                  <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
                                     F Failed
                                   </span>
                                 )}
                               </div>
-                              <span className="text-xs text-slate-400 truncate block max-w-xs sm:max-w-md" title={item.title}>
+                              <span className="text-xs text-slate-300 truncate block max-w-xs sm:max-w-md mt-1 font-medium" title={item.title}>
                                 {item.title}
                               </span>
                             </div>
@@ -5622,10 +6297,10 @@ export default function Home() {
                           <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
                             <div className="text-right">
                               <span className="text-[9px] text-slate-400 block uppercase tracking-wider font-bold">Current</span>
-                              <span className={`text-xs font-black px-2 py-0.5 rounded border inline-block ${
+                              <span className={`text-xs font-black px-2.5 py-1 rounded-xl border inline-block ${
                                 item.isF 
                                   ? 'bg-rose-950/40 border-rose-800/60 text-rose-300' 
-                                  : 'bg-zinc-900 border-slate-700 text-slate-200'
+                                  : 'bg-[#050508] border-slate-700 text-slate-200'
                               }`}>
                                 {item.currentGrade} ({item.currentGp.toFixed(1)})
                               </span>
@@ -5642,7 +6317,7 @@ export default function Home() {
                                     [item.code]: newG
                                   }));
                                 }}
-                                className="text-xs font-bold bg-zinc-900 text-slate-100 border border-slate-700 hover:border-indigo-500 rounded-lg px-2 py-1 focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner"
+                                className="text-xs font-bold bg-[#050508] text-slate-100 border border-slate-700 hover:border-indigo-400 rounded-xl px-2.5 py-1 focus:outline-none focus:border-indigo-400 cursor-pointer shadow-inner"
                               >
                                 {Object.keys(GRADING_SCALE).map(g => (
                                   <option key={g} value={g}>
@@ -5655,7 +6330,7 @@ export default function Home() {
                         </div>
 
                         {/* Individual Course Impact Sub-bar */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                        <div className="flex items-center justify-between pt-2.5 border-t border-slate-800/60 text-xs">
                           <div className="flex items-center gap-1.5">
                             {isBoost ? (
                               <span className="text-emerald-400 font-bold flex items-center gap-1">
@@ -5686,11 +6361,11 @@ export default function Home() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800/80 bg-zinc-900/30 flex justify-end">
+            <div className="p-5 border-t border-slate-800/80 bg-[#0e0e14]/30 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowRoiModal(false)}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-bold rounded-xl transition cursor-pointer shadow-md hover:shadow-indigo-600/20"
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-2xl transition cursor-pointer shadow-lg shadow-blue-600/25"
               >
                 Done
               </button>
@@ -5702,41 +6377,41 @@ export default function Home() {
       {/* Official Grading System Reference Modal */}
       {showGradingSystemModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-[#08080d]/98 border border-slate-700/80 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-zinc-900/40">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                  <Award className="h-4 w-4" />
+            <div className="p-5 border-b border-slate-800/80 flex items-center justify-between bg-[#0e0e14]/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Award className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-100">Grading System</h3>
-                  <p className="text-[11px] text-slate-400">University standard grade points & marks distribution</p>
+                  <h3 className="text-base font-extrabold text-white tracking-tight">Grading System</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">University standard grade points &amp; marks distribution</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowGradingSystemModal(false)}
-                className="h-8 w-8 rounded-lg bg-zinc-900 border border-slate-800 hover:bg-zinc-800 flex items-center justify-center text-slate-400 hover:text-slate-100 transition cursor-pointer"
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-4">
+            <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
               <p className="text-xs text-slate-300 leading-relaxed">
                 The grades at the university will be indicated in the following manner:
               </p>
 
-              <div className="border border-slate-800 rounded-xl overflow-hidden bg-zinc-900/30">
+              <div className="border border-slate-800/80 rounded-2xl overflow-hidden bg-[#0e0e14]/30">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-800 bg-zinc-900/80 text-[10px] uppercase font-bold text-slate-400">
-                      <th className="p-2.5">Marks Range</th>
-                      <th className="p-2.5 text-center">Grade</th>
-                      <th className="p-2.5 text-center">Grade Point</th>
-                      <th className="p-2.5">Remarks</th>
+                    <tr className="border-b border-slate-800 bg-[#050508] text-[10px] uppercase font-bold text-slate-400">
+                      <th className="p-3">Marks Range</th>
+                      <th className="p-3 text-center">Grade</th>
+                      <th className="p-3 text-center">Grade Point</th>
+                      <th className="p-3">Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5745,10 +6420,10 @@ export default function Home() {
                         key={idx} 
                         className="border-b border-slate-800/60 last:border-0 hover:bg-white/[0.02] transition"
                       >
-                        <td className="p-2.5 font-mono text-[11px] text-slate-300">{row.marks}</td>
-                        <td className="p-2.5 font-bold text-center text-indigo-300">{row.grade}</td>
-                        <td className="p-2.5 font-mono font-semibold text-center text-slate-200">({row.points})</td>
-                        <td className="p-2.5 text-slate-400 font-medium">{row.remark || "—"}</td>
+                        <td className="p-3 font-mono text-[11px] text-slate-300">{row.marks}</td>
+                        <td className="p-3 font-bold text-center text-indigo-300">{row.grade}</td>
+                        <td className="p-3 font-mono font-semibold text-center text-slate-200">({row.points})</td>
+                        <td className="p-3 text-slate-400 font-medium">{row.remark || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5757,11 +6432,11 @@ export default function Home() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800/80 bg-zinc-900/30 flex justify-end">
+            <div className="p-5 border-t border-slate-800/80 bg-[#0e0e14]/30 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowGradingSystemModal(false)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 text-xs font-semibold rounded-xl transition cursor-pointer"
+                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-2xl shadow-lg shadow-blue-600/25 transition cursor-pointer"
               >
                 Close
               </button>
