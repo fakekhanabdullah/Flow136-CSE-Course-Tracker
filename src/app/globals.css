@@ -61,3 +61,12 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #475569;
 }
+
+/* Hide scrollbar utility for clean pill containers and swipable lists */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

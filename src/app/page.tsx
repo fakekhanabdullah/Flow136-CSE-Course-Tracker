@@ -165,6 +165,23 @@ const GRADING_SYSTEM_INFO = [
   { marks: "<50", grade: "F", points: "0.0", remark: "Failure" },
 ];
 
+// Deduplicate courses within a semester, preserving whichever attempt has a grade or is completed
+const dedupeSemesterCourses = (courses: SelectedCourse[]): SelectedCourse[] => {
+  const seen = new Map<string, SelectedCourse>();
+  for (const c of courses) {
+    if (!seen.has(c.code)) {
+      seen.set(c.code, c);
+    } else {
+      const existing = seen.get(c.code)!;
+      // If the newly encountered one has a grade or is completed, prioritize it over an empty/incomplete one
+      if ((c.grade || c.isCompleted) && (!existing.grade && !existing.isCompleted)) {
+        seen.set(c.code, c);
+      }
+    }
+  }
+  return Array.from(seen.values());
+};
+
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
 
@@ -492,7 +509,13 @@ export default function Home() {
         const parsed = JSON.parse(savedState);
         if (parsed.mode) setMode(parsed.mode);
         if (parsed.isOnboarded !== undefined) setIsOnboarded(parsed.isOnboarded);
-        if (parsed.semesters) setSemesters(parsed.semesters);
+        if (parsed.semesters && Array.isArray(parsed.semesters)) {
+          const sanitized = parsed.semesters.map((s: Semester) => ({
+            ...s,
+            courses: dedupeSemesterCourses(s.courses || [])
+          }));
+          setSemesters(sanitized);
+        }
         if (parsed.thesisTrack) setThesisTrack(parsed.thesisTrack);
         if (parsed.thesisSteps) setThesisSteps(parsed.thesisSteps);
         if (parsed.projectCompleted !== undefined) setProjectCompleted(parsed.projectCompleted);
@@ -609,11 +632,15 @@ export default function Home() {
   };
 
   const updateSemesters = (newSemesters: Semester[]) => {
-    setSemesters(newSemesters);
+    const sanitized = newSemesters.map(s => ({
+      ...s,
+      courses: dedupeSemesterCourses(s.courses || [])
+    }));
+    setSemesters(sanitized);
     saveStateToLocalStorage(
       mode,
       isOnboarded,
-      newSemesters,
+      sanitized,
       thesisTrack,
       thesisSteps,
       projectCompleted,
@@ -917,6 +944,12 @@ export default function Home() {
   // Move a course from one semester to another via drag-and-drop (Atomic state transition)
   const handleDragMoveCourse = (courseCode: string, sourceSemesterId: string, targetSemesterId: string) => {
     if (sourceSemesterId === targetSemesterId) return;
+
+    const targetSem = semesters.find(s => s.id === targetSemesterId);
+    if (targetSem && targetSem.courses.some(c => c.code === courseCode)) {
+      setDragOverSemesterId(null);
+      return;
+    }
 
     const sourceSem = semesters.find(s => s.id === sourceSemesterId);
     const courseObj = sourceSem?.courses.find(c => c.code === courseCode);
@@ -1904,12 +1937,14 @@ export default function Home() {
     updateSemesters(autoAdjusted);
   };
 
-  const handleRemoveCourse = (semId: string, courseCode: string) => {
+  const handleRemoveCourse = (semId: string, courseCode: string, courseIdx?: number) => {
     const updated = semesters.map(sem => {
       if (sem.id === semId) {
         return {
           ...sem,
-          courses: sem.courses.filter(c => c.code !== courseCode)
+          courses: typeof courseIdx === 'number'
+            ? sem.courses.filter((_, idx) => idx !== courseIdx)
+            : sem.courses.filter(c => c.code !== courseCode)
         };
       }
       return sem;
@@ -1918,6 +1953,20 @@ export default function Home() {
   };
 
   const handleAddCourseToSemester = (semId: string, courseCode: string) => {
+    const targetSem = semesters.find(s => s.id === semId);
+    if (!targetSem) return;
+
+    // Strict duplicate check: if the semester already has this course, don't allow duplicate!
+    if (swappingCourseCode) {
+      if (courseCode !== swappingCourseCode && targetSem.courses.some(c => c.code === courseCode)) {
+        return;
+      }
+    } else {
+      if (targetSem.courses.some(c => c.code === courseCode)) {
+        return;
+      }
+    }
+
     const updated = semesters.map(sem => {
       if (sem.id === semId) {
         if (swappingCourseCode) {
@@ -1931,7 +1980,6 @@ export default function Home() {
             })
           };
         } else {
-          if (sem.courses.some(c => c.code === courseCode)) return sem;
           return {
             ...sem,
             courses: [...sem.courses, { code: courseCode, grade: "", isCompleted: false }]
@@ -1948,6 +1996,7 @@ export default function Home() {
 
   const handleAddCategoryCourse = () => {
     if (!selectedCategoryCourseCode || !selectedCategoryTargetSemesterId) return;
+    setSwappingCourseCode(null);
     handleAddCourseToSemester(selectedCategoryTargetSemesterId, selectedCategoryCourseCode);
     setActiveCategorySelectorKey(null);
     setSelectedCategoryCourseCode("");
@@ -1955,6 +2004,10 @@ export default function Home() {
   };
 
   const handleMoveCourse = (sourceSemId: string, destSemId: string, course: SelectedCourse) => {
+    const destSem = semesters.find(s => s.id === destSemId);
+    if (destSem && destSem.courses.some(c => c.code === course.code)) {
+      return; // Already in destination semester!
+    }
     const updated = semesters.map(sem => {
       // Remove from source
       if (sem.id === sourceSemId) {
@@ -4393,7 +4446,10 @@ export default function Home() {
                           </div>
 
                           <button
-                            onClick={() => setActiveCourseSelectorSemesterId(sem.id)}
+                            onClick={() => {
+                              setSwappingCourseCode(null);
+                              setActiveCourseSelectorSemesterId(sem.id);
+                            }}
                             className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-3 py-1 rounded-xl flex items-center gap-1.5 text-xs font-bold transition shadow-md shadow-indigo-600/20 cursor-pointer shrink-0"
                             title="Add Course to Semester"
                           >
@@ -4443,7 +4499,7 @@ export default function Home() {
                         </div>
                       )}
 
-                      {sem.courses.map((c) => {
+                      {sem.courses.map((c, cIdx) => {
                         const courseDetails = COURSES.find(co => co.code === c.code);
                         const isCSE400Row = c.code === "CSE400";
                         const warnings = prerequisiteWarnings[`${sem.id}_${c.code}`];
@@ -4459,7 +4515,7 @@ export default function Home() {
 
                         return (
                           <div 
-                            key={c.code}
+                            key={`${c.code}_${cIdx}`}
                             draggable={true}
                             onDragStart={(e) => {
                               e.dataTransfer.setData("text/plain", c.code);
@@ -4596,9 +4652,10 @@ export default function Home() {
                                     const { hp } = getCoursePrereqs(c.code, onboardingData.pathway, onboardingData.creditOption);
                                     const missingHp = hp.filter(code => !isCourseCompletedPrior(code, destIdx, semesters, mode));
                                     const isLocked = missingHp.length > 0;
+                                    const alreadyInDest = s.courses.some(course => course.code === c.code);
                                     return (
-                                      <option key={s.id} value={s.id} disabled={isLocked}>
-                                        {s.name} {isLocked ? "🔒" : ""}
+                                      <option key={s.id} value={s.id} disabled={isLocked || alreadyInDest}>
+                                        {s.name} {alreadyInDest ? "(Already added)" : (isLocked ? "🔒" : "")}
                                       </option>
                                     );
                                   })}
@@ -4619,7 +4676,7 @@ export default function Home() {
 
                               {/* Remove Course button */}
                               <button
-                                onClick={() => handleRemoveCourse(sem.id, c.code)}
+                                onClick={() => handleRemoveCourse(sem.id, c.code, cIdx)}
                                 className="h-7 w-7 rounded-xl bg-white/[0.03] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/40 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer shadow-sm"
                                 title="Remove Course"
                               >
@@ -4718,25 +4775,32 @@ export default function Home() {
               ) : (
                 filteredSearchCourses.map(course => {
                   const targetSemIdx = semesters.findIndex(s => s.id === activeCourseSelectorSemesterId);
+                  const targetSem = semesters.find(s => s.id === activeCourseSelectorSemesterId);
+                  const isAlreadyInSem = targetSem?.courses.some(c => c.code === course.code);
+                  const isSwappingSelf = swappingCourseCode === course.code;
+                  const isBlockedDuplicate = isAlreadyInSem && !isSwappingSelf;
+
                   const { hp } = getCoursePrereqs(course.code, onboardingData.pathway, onboardingData.creditOption);
                   const missingHp = hp.filter(code => !isCourseCompletedPrior(code, targetSemIdx, semesters, mode));
                   const isLocked = missingHp.length > 0;
                   const theme = getCategoryTheme(course.category, course.code);
 
+                  const isDisabled = isLocked || isBlockedDuplicate;
+
                   return (
                     <button
                       key={course.code}
-                      disabled={isLocked}
+                      disabled={isDisabled}
                       onClick={() => {
                         if (activeCourseSelectorSemesterId) {
                           handleAddCourseToSemester(activeCourseSelectorSemesterId, course.code);
                         }
                       }}
-                      className={`w-full p-3.5 text-left hover:bg-white/[0.04] rounded-2xl transition flex items-center justify-between text-xs group ${
-                        isLocked ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                      className={`w-full p-3.5 text-left rounded-2xl transition flex items-center justify-between text-xs group ${
+                        isDisabled ? 'opacity-40 cursor-not-allowed bg-transparent' : 'cursor-pointer hover:bg-white/[0.04]'
                       }`}
                     >
-                      <div>
+                      <div className="flex-1 min-w-0 pr-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`font-mono font-black text-xs sm:text-sm px-2 py-0.5 rounded-lg border shadow-inner ${theme.codePill}`}>
                             {course.code}
@@ -4749,7 +4813,13 @@ export default function Home() {
                           </span>
                           {renderMandatoryBadge(course.code)}
                         </div>
-                        <p className="text-slate-300 text-xs mt-1 font-medium">{course.title}</p>
+                        <p className="text-slate-300 text-xs mt-1 font-medium truncate">{course.title}</p>
+                        {isBlockedDuplicate && (
+                          <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-400 font-semibold">
+                            <Info className="h-3 w-3 shrink-0" />
+                            <span>Already added to this semester</span>
+                          </div>
+                        )}
                         {isLocked && (
                           <div className="flex items-center gap-1 mt-1 text-[10px] text-rose-400 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -4758,10 +4828,24 @@ export default function Home() {
                         )}
                       </div>
 
-                      <div>
-                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-xl border select-none ${theme.badge}`}>
-                          {theme.label}
-                        </span>
+                      <div className="shrink-0">
+                        {isBlockedDuplicate ? (
+                          <span className="text-[10px] font-semibold text-slate-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-1 rounded-xl whitespace-nowrap">
+                            In Semester
+                          </span>
+                        ) : isLocked ? (
+                          <span className="text-[10px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-xl whitespace-nowrap">
+                            Locked
+                          </span>
+                        ) : swappingCourseCode ? (
+                          <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-xl whitespace-nowrap flex items-center gap-1">
+                            <ArrowRightLeft className="h-3 w-3 shrink-0" /> Swap
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl whitespace-nowrap flex items-center gap-1">
+                            <Plus className="h-3 w-3 shrink-0" /> Add
+                          </span>
+                        )}
                       </div>
                     </button>
                   );
@@ -4854,6 +4938,9 @@ export default function Home() {
               ) : (
                 categoryFilteredCourses.map(course => {
                   const targetSemIdx = semesters.findIndex(s => s.id === selectedCategoryTargetSemesterId);
+                  const targetSem = semesters.find(s => s.id === selectedCategoryTargetSemesterId);
+                  const isAlreadyInSem = targetSem?.courses.some(c => c.code === course.code);
+
                   const { hp } = getCoursePrereqs(course.code, onboardingData.pathway, onboardingData.creditOption);
                   const missingHp = hp.filter(code => !isCourseCompletedPrior(code, targetSemIdx, semesters, mode));
                   const isLocked = missingHp.length > 0;
@@ -4863,21 +4950,23 @@ export default function Home() {
                   const compState = getCompletedCourseState(course.code);
                   const isCompleted = compState.isCompleted;
 
+                  const isDisabled = isLocked || isAlreadyInSem;
+
                   return (
                     <button
                       key={course.code}
                       type="button"
-                      disabled={isLocked}
-                      onClick={() => setSelectedCategoryCourseCode(course.code)}
-                      className={`w-full p-3.5 text-left rounded-2xl border transition flex items-center justify-between text-xs group cursor-pointer ${
-                        isLocked 
-                          ? 'opacity-40 cursor-not-allowed border-transparent' 
+                      disabled={isDisabled}
+                      onClick={() => !isDisabled && setSelectedCategoryCourseCode(course.code)}
+                      className={`w-full p-3.5 text-left rounded-2xl border transition flex items-center justify-between text-xs group ${
+                        isDisabled 
+                          ? 'opacity-40 cursor-not-allowed border-transparent bg-transparent' 
                           : isSelected
                             ? 'bg-indigo-600/15 border-indigo-500/80 text-white shadow-md'
-                            : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
+                            : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-white/[0.04] cursor-pointer'
                       }`}
                     >
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0 pr-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`font-mono font-black text-xs sm:text-sm px-2 py-0.5 rounded-lg border shadow-inner ${theme.codePill}`}>
                             {course.code}
@@ -4895,7 +4984,13 @@ export default function Home() {
                             </span>
                           )}
                         </div>
-                        <p className="text-slate-300 text-xs mt-1 font-medium">{course.title}</p>
+                        <p className="text-slate-300 text-xs mt-1 font-medium truncate">{course.title}</p>
+                        {isAlreadyInSem && (
+                          <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-400 font-semibold">
+                            <Info className="h-3 w-3 shrink-0" />
+                            <span>Already added to selected semester</span>
+                          </div>
+                        )}
                         {isLocked && (
                           <div className="flex items-center gap-1 mt-1 text-[10px] text-rose-400 font-semibold">
                             <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -4904,10 +4999,24 @@ export default function Home() {
                         )}
                       </div>
 
-                      <div className="text-right pl-4">
-                        <span className={`text-[10px] font-semibold uppercase tracking-wider block px-2.5 py-1 rounded-xl border select-none ${theme.badge}`}>
-                          {theme.label}
-                        </span>
+                      <div className="shrink-0">
+                        {isAlreadyInSem ? (
+                          <span className="text-[10px] font-semibold text-slate-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-1 rounded-xl whitespace-nowrap">
+                            In Semester
+                          </span>
+                        ) : isLocked ? (
+                          <span className="text-[10px] font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-xl whitespace-nowrap">
+                            Locked
+                          </span>
+                        ) : isSelected ? (
+                          <span className="text-[10px] font-bold text-white bg-indigo-600 px-2.5 py-1 rounded-xl whitespace-nowrap flex items-center gap-1 shadow-sm">
+                            <Check className="h-3 w-3 shrink-0" /> Selected
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-xl whitespace-nowrap">
+                            Select
+                          </span>
+                        )}
                       </div>
                     </button>
                   );
@@ -4930,7 +5039,7 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                disabled={!selectedCategoryCourseCode}
+                disabled={!selectedCategoryCourseCode || (selectedCategoryTargetSemesterId ? semesters.find(s => s.id === selectedCategoryTargetSemesterId)?.courses.some(c => c.code === selectedCategoryCourseCode) : false)}
                 onClick={handleAddCategoryCourse}
                 className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-2xl shadow-lg shadow-blue-600/25 transition cursor-pointer"
               >
@@ -5052,23 +5161,28 @@ export default function Home() {
             <div className="overflow-y-auto overflow-x-hidden max-w-full custom-scrollbar py-3 sm:py-4 flex items-start justify-center flex-grow">
               {/* Dynamic responsive scaling wrapper to fit 750px cleanly in any viewport width */}
               <div 
-                className="shrink-0 transition-all duration-300"
+                className="shrink-0 transition-all duration-300 relative"
                 style={{
                   width: `${750 * snapshotScale}px`,
                   height: `${snapshotHeight * snapshotScale}px`,
-                  transform: `scale(${snapshotScale})`,
-                  transformOrigin: 'top center'
                 }}
               >
-                {/* Visible Grade Sheet Node Target */}
-                <div 
-                  id="flow136-grade-sheet-export-node"
-                  style={{ 
-                    backgroundColor: '#030305',
-                    fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+                <div
+                  style={{
+                    width: '750px',
+                    transform: `scale(${snapshotScale})`,
+                    transformOrigin: 'top left',
                   }}
-                  className="w-[750px] min-w-[750px] h-auto min-h-[600px] border border-white/[0.12] rounded-3xl p-7 shadow-2xl text-slate-100 relative overflow-visible font-sans mx-auto bg-[#030305]"
                 >
+                  {/* Visible Grade Sheet Node Target */}
+                  <div 
+                    id="flow136-grade-sheet-export-node"
+                    style={{ 
+                      backgroundColor: '#030305',
+                      fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+                    }}
+                    className="w-[750px] min-w-[750px] h-auto min-h-[600px] border border-white/[0.12] rounded-3xl p-7 shadow-2xl text-slate-100 relative overflow-visible font-sans bg-[#030305]"
+                  >
                   {/* Ambient Background Glow (Z-Index 0) */}
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[160px] bg-indigo-500/[0.07] blur-3xl pointer-events-none rounded-full" />
 
@@ -5348,6 +5462,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div> {/* End flow136-grade-sheet-export-node */}
+                </div> {/* End inner-transform-wrapper */}
               </div> {/* End scale-wrapper */}
             </div> {/* End scrollable container */}
 
@@ -5604,7 +5719,7 @@ export default function Home() {
               </div>
 
               {/* Scrollable Modal Content */}
-              <div className="flex-grow overflow-auto p-3 sm:p-5 md:p-6 relative z-10 custom-scrollbar space-y-5 sm:space-y-6">
+              <div className="flex-grow overflow-y-auto overflow-x-hidden p-3 sm:p-5 md:p-6 relative z-10 custom-scrollbar space-y-5 sm:space-y-6">
                 
                 {/* Stats Summary Bar */}
                 <div className="bg-[#0c0c14]/70 border border-white/[0.07] rounded-2xl p-3 sm:p-4 space-y-3 shadow-md">
