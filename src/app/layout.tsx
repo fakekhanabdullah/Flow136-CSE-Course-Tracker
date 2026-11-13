@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Flow136",
   },
+  verification: {
+    google: "IPWUw60VNgRfSKJlcp8Z8I1NnAxnc1U3SEoQehG5UGE",
+  },
 };
 
 export default function RootLayout({
@@ -27,6 +30,9 @@ export default function RootLayout({
       lang="en"
       className="h-full antialiased"
     >
+      <head>
+        <meta name="google-site-verification" content="IPWUw60VNgRfSKJlcp8Z8I1NnAxnc1U3SEoQehG5UGE" />
+      </head>
       <body className="min-h-full flex flex-col font-sans text-zinc-200 bg-[#030303]">{children}</body>
     </html>
   );

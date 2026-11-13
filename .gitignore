@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Charts
 chart.jpg
+
+# Private developer documentation
+GOOGLE_OAUTH_VERIFICATION_GUIDE.md
