@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Flow136 Banner](public/icon.svg)
+![Flow136 Banner](src/app/icon.svg)
 
 **Your BRACU CSE Curriculum, Minus the Complexity.**  
 *Interactive Progress Tracker • Prerequisite DAG Validator • CGPA ROI Analyzer • Zero-Database Google Drive Cloud Sync*
