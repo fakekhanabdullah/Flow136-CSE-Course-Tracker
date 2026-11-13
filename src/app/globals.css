@@ -20,12 +20,12 @@
 }
 
 body {
-  background: #030303;
-  color: #f4f4f5;
+  background: #030304;
+  color: #f8fafc;
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Global Sleek Scrollbar Styling */
+/* Global Sleek Modern Blue-Indigo Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -34,18 +34,18 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(51, 65, 85, 0.5); /* Translucent slate-700 */
-  border-radius: 10px;
+  background-color: rgba(99, 102, 241, 0.28);
+  border-radius: 9999px;
   transition: background-color 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #475569; /* Slate-600 */
+  background-color: rgba(99, 102, 241, 0.65);
 }
 
 /* Local Component Scrollbar Override (Firefox support & container specific styles) */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(51, 65, 85, 0.5) transparent;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
 }
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
@@ -55,11 +55,12 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(51, 65, 85, 0.5);
-  border-radius: 10px;
+  background-color: rgba(99, 102, 241, 0.28);
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #475569;
+  background-color: rgba(99, 102, 241, 0.65);
 }
 
 /* Hide scrollbar utility for clean pill containers and swipable lists */
@@ -70,3 +71,17 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@keyframes blueGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(99, 102, 241, 0.48);
+  }
+}
+
+.animate-blue-glow {
+  animation: blueGlow 3s ease-in-out infinite;
+}
+

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { toBlob } from "html-to-image";
 import { 
   AlertTriangle, 
@@ -30,8 +30,12 @@ import {
   Camera,
   List,
   Columns,
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Sparkles,
   CheckCircle2,
   Crosshair,
@@ -39,10 +43,47 @@ import {
   Layers,
   BadgeCheck,
   Gauge,
+  Zap,
   Search,
-  Compass
+  Compass,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  ShieldCheck,
+  ShieldAlert,
+  Key,
+  User,
+  ExternalLink,
+  Menu
 } from "lucide-react";
 import { COURSES, PREREQUISITES, Course, PrereqRule } from "./courses-data";
+import {
+  CloudUser,
+  DriveBackupPayload,
+  SyncStatus,
+  BRACU_STUDENT_DOMAIN,
+  DEFAULT_GSI_CLIENT_ID,
+  STORAGE_KEYS,
+  isAuthorizedBRACUStudent,
+  requestGoogleAccessToken,
+  fetchGoogleUserProfile,
+  revokeGoogleToken,
+  findDriveBackupFile,
+  saveDriveBackup,
+  loadDriveBackup,
+  simulateStudentLogin,
+  saveDemoDriveBackup,
+  loadDemoDriveBackup,
+  formatSyncTimestamp,
+  isGoogleTokenExpired
+} from "@/lib/googleDriveSync";
+import CgpaSemesterGraph from "@/components/CgpaSemesterGraph";
+import AddSemesterModal from "@/components/AddSemesterModal";
+import AddCoursesModal from "@/components/AddCoursesModal";
+import QuickGradeCarouselModal from "@/components/QuickGradeCarouselModal";
+import SpeedDialMenu from "@/components/SpeedDialMenu";
+import MobileBottomNav, { MobileTab } from "@/components/MobileBottomNav";
+
 
 // Prerequisite Helper functions
 const getCoursePrereqs = (courseCode: string, pathway: 'foundation' | 'credit' | null, creditOption?: 'opt1' | 'opt2' | null) => {
@@ -108,6 +149,7 @@ interface SelectedCourse {
   code: string;
   grade: string;      // Mode B: 'A', 'A-', 'B+', etc. or '' (Not Taken Yet)
   isCompleted: boolean; // Mode A: simple checkbox completion
+  isRepeat?: boolean;   // Flag for retaken / repeated course
 }
 
 interface Semester {
@@ -185,35 +227,6 @@ const dedupeSemesterCourses = (courses: SelectedCourse[]): SelectedCourse[] => {
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
 
-  const getHighlightClass = (target: string) => {
-    if (tutorialStep === null) return "";
-    
-    // Fine-tuned soft glows to match theme elegantly without being too intense
-    let glow = "";
-    if (target === "layout-toggles") {
-      glow = "!border-indigo-500/40 !shadow-[0_0_6px_rgba(99,102,241,0.2)] transition-all duration-300";
-    } else if (target.startsWith("category-")) {
-      glow = "!border-indigo-500/35 !shadow-[0_0_8px_rgba(99,102,241,0.18)] transition-all duration-300";
-    } else if (target === "gpa-solver-card" || target === "roi-analyzer") {
-      glow = "!border-indigo-500/35 !shadow-[0_0_8px_rgba(99,102,241,0.18)] transition-all duration-300";
-    } else {
-      glow = "!border-indigo-500/45 !shadow-[0_0_8px_rgba(99,102,241,0.22)] transition-all duration-300";
-    }
-
-    if (target === "cta-button" && tutorialStep === 1) return glow;
-    if ((target === "pathway-card-a" || target === "pathway-card-b") && tutorialStep === 2) return glow;
-    if ((target === "rs-term-select" || target === "starting-intake-select" || target === "english-status-select") && tutorialStep === 3) return glow;
-    if (target === "generate-plan-btn" && tutorialStep === 4) return glow;
-    if (target === "mode-toggler" && (tutorialStep === 5 || tutorialStep === 7)) return glow;
-    if ((target === "category-core" || target === "category-school" || target === "category-electives" || target === "category-gened") && tutorialStep === 6) return glow;
-    if (target === "gpa-solver-card" && tutorialStep === 8) return glow;
-    if (target === "roi-analyzer" && (tutorialStep === 8 || tutorialStep === 9)) return glow;
-    if (target === "layout-toggles" && tutorialStep === 10) return glow;
-    if (target === "hamburger-menu" && tutorialStep === 11) return glow;
-    if (target === "feeling-lost-btn" && tutorialStep === 12) return glow;
-    return "";
-  };
-
   // App settings/modes
   const [mode, setMode] = useState<'tracker' | 'gpa'>('tracker');
   const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
@@ -269,6 +282,41 @@ export default function Home() {
   const [showDataDropdown, setShowDataDropdown] = useState<boolean>(false);
   const [backupFileError, setBackupFileError] = useState<string | null>(null);
   const [targetCgpa, setTargetCgpa] = useState<string>("3.50");
+
+  // Floating Action / Speed Dial & Dynamic Modals state
+  const [isAddSemesterModalOpen, setIsAddSemesterModalOpen] = useState<boolean>(false);
+  const [focusedSemesterForModal, setFocusedSemesterForModal] = useState<Semester | null>(null);
+  const [isAddCoursesModalOpen, setIsAddCoursesModalOpen] = useState<boolean>(false);
+  const [addCoursesPreselected, setAddCoursesPreselected] = useState<string[]>([]);
+  const [isQuickGradesModalOpen, setIsQuickGradesModalOpen] = useState<boolean>(false);
+  const [quickGradesInitialSemIdx, setQuickGradesInitialSemIdx] = useState<number>(0);
+  const [isMobileSpeedDialOpen, setIsMobileSpeedDialOpen] = useState<boolean>(false);
+  const [mobileActiveTab, setMobileActiveTab] = useState<MobileTab>("semesters");
+  const [isExtraSidebarOpen, setIsExtraSidebarOpen] = useState<boolean>(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState<string>("");
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+
+  const globalFilteredCourses = useMemo(() => {
+    if (!globalSearchQuery.trim()) return [];
+    const q = globalSearchQuery.toLowerCase().trim();
+    return COURSES.filter(c => 
+      c.code.toLowerCase().includes(q) || 
+      c.title.toLowerCase().includes(q) || 
+      (c.category && c.category.toLowerCase().includes(q))
+    ).slice(0, 8);
+  }, [globalSearchQuery]);
+
+
+  // Keep focusedSemesterForModal synced with live semesters state
+  useEffect(() => {
+    if (focusedSemesterForModal) {
+      const refreshed = semesters.find(s => s.id === focusedSemesterForModal.id);
+      if (refreshed) {
+        setFocusedSemesterForModal(refreshed);
+      }
+    }
+  }, [semesters]);
+
   const [showRoiModal, setShowRoiModal] = useState<boolean>(false);
   const [roiThresholdGrade, setRoiThresholdGrade] = useState<string>("B-");
   const [selectedRoiCourses, setSelectedRoiCourses] = useState<Record<string, boolean>>({});
@@ -279,114 +327,23 @@ export default function Home() {
   const [showGradeSheetModal, setShowGradeSheetModal] = useState<boolean>(false);
   const [snapshotScale, setSnapshotScale] = useState<number>(1);
   const [snapshotHeight, setSnapshotHeight] = useState<number>(700);
-  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
-  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({
-    position: 'fixed',
-    bottom: '24px',
-    right: '24px',
-    zIndex: 9999
-  });
 
-  useEffect(() => {
-    if (tutorialStep === null || !isMounted) return;
-
-    const updatePosition = () => {
-      const isMd = window.innerWidth >= 768;
-
-      if (isMd) {
-        setPopoverStyle({
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          left: 'auto',
-          top: 'auto',
-          zIndex: 9999,
-          width: '384px',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-        });
-      } else {
-        setPopoverStyle({
-          position: 'fixed',
-          bottom: '16px',
-          left: '16px',
-          right: '16px',
-          top: 'auto',
-          zIndex: 9999,
-          width: 'calc(100vw - 32px)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-        });
-      }
-    };
-
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    return () => window.removeEventListener('resize', updatePosition);
-  }, [tutorialStep, isMounted]);
-
-  // Auto-start tutorial on user's first time
-  useEffect(() => {
-    if (isMounted) {
-      try {
-        const hasCompleted = localStorage.getItem("flow136_tutorial_completed");
-        if (!hasCompleted) {
-          setTutorialStep(1);
-        }
-      } catch (error) {
-        console.error("Local storage access blocked, skipping auto-start tour:", error);
-      }
-    }
-  }, [isMounted]);
-
-  const handleTutorialStepChange = (step: number) => {
-    if (step < 1) return;
-    if (step > 12) {
-      try {
-        localStorage.setItem("flow136_tutorial_completed", "true");
-      } catch (error) {
-        console.error("Local storage set blocked:", error);
-      }
-      setTutorialStep(null);
-      return;
-    }
-    
-    setTutorialStep(step);
-    
-    // Automatic navigation transitions based on the tutorial step
-    if (step === 1) {
-      setShowDashboard(false);
-    } else if (step === 2) {
-      setShowDashboard(true);
-      setWizardStep(1);
-    } else if (step === 3) {
-      setShowDashboard(true);
-      setWizardStep(2);
-    } else if (step === 4) {
-      setShowDashboard(true);
-      setWizardStep(3);
-    } else if (step === 5) {
-      setShowDashboard(true);
-      // Main dashboard view (ensure we are onboarded or showDashboard is true)
-    } else if (step === 6) {
-      setShowDashboard(true);
-    } else if (step === 7) {
-      setShowDashboard(true);
-      setMode('tracker');
-    } else if (step === 8) {
-      setShowDashboard(true);
-      setMode('gpa');
-    } else if (step === 9) {
-      setShowDashboard(true);
-      setMode('gpa');
-      setShowRoiModal(true);
-    } else if (step === 10) {
-      setShowDashboard(true);
-      setShowRoiModal(false);
-    } else if (step === 11) {
-      setShowDashboard(true);
-    } else if (step === 12) {
-      setShowDashboard(true);
-    }
-  };
+  // Cloud Sync & Auth Gatekeeper State
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<SyncStatus>('unauthenticated');
+  const [cloudLastSync, setCloudLastSync] = useState<string | null>(null);
+  const [cloudFileId, setCloudFileId] = useState<string | null>(null);
+  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState<boolean>(true);
+  const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
+  const [gatekeeperError, setGatekeeperError] = useState<string | null>(null);
+  const [customClientId, setCustomClientId] = useState<string>('');
+  const [showClientIdInput, setShowClientIdInput] = useState<boolean>(false);
+  const [cloudToastMessage, setCloudToastMessage] = useState<string | null>(null);
+  const [cloudConflictPayload, setCloudConflictPayload] = useState<DriveBackupPayload | null>(null);
+  const [showCloudConflictModal, setShowCloudConflictModal] = useState<boolean>(false);
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
+  const cloudSyncDebounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Dynamic scaling for the Academic Progress Snapshot Preview Modal
   useEffect(() => {
@@ -424,10 +381,60 @@ export default function Home() {
   const [roadmapSearch, setRoadmapSearch] = useState<string>('');
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [semesterSortOrder, setSemesterSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [draggingCourseCode, setDraggingCourseCode] = useState<string | null>(null);
   const [draggingSourceSemesterId, setDraggingSourceSemesterId] = useState<string | null>(null);
   const [dragOverSemesterId, setDragOverSemesterId] = useState<string | null>(null);
+
+  // Kanban board top-scrollbar synchronization refs
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const topScrollBarRef = useRef<HTMLDivElement>(null);
+  const [kanbanScrollWidth, setKanbanScrollWidth] = useState<number>(0);
+  const isSyncingScroll = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (viewMode !== 'kanban') return;
+    const el = boardContainerRef.current;
+    if (!el) return;
+
+    const updateWidth = () => {
+      if (boardContainerRef.current) {
+        setKanbanScrollWidth(boardContainerRef.current.scrollWidth);
+      }
+    };
+
+    updateWidth();
+    const ro = new ResizeObserver(updateWidth);
+    ro.observe(el);
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [viewMode, semesters, semesterSortOrder]);
+
+  const handleTopScroll = () => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (boardContainerRef.current && topScrollBarRef.current) {
+      boardContainerRef.current.scrollLeft = topScrollBarRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
+  };
+
+  const handleBoardScroll = () => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (topScrollBarRef.current && boardContainerRef.current) {
+      topScrollBarRef.current.scrollLeft = boardContainerRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
+  };
 
   // Monitor screen width for responsive features
   useEffect(() => {
@@ -504,6 +511,11 @@ export default function Home() {
         setViewMode(savedView);
       }
 
+      const savedSort = localStorage.getItem("flow136_semester_sort");
+      if (savedSort === "asc" || savedSort === "desc") {
+        setSemesterSortOrder(savedSort);
+      }
+
       const savedState = localStorage.getItem("bracu_course_tracker_state");
       if (savedState) {
         const parsed = JSON.parse(savedState);
@@ -522,10 +534,95 @@ export default function Home() {
         if (parsed.internshipCompleted !== undefined) setInternshipCompleted(parsed.internshipCompleted);
         if (parsed.onboardingData) setOnboardingData(parsed.onboardingData);
       }
+
+      // Hydrate Cloud Sync session & Guest Mode
+      const savedCloudUser = localStorage.getItem(STORAGE_KEYS.USER);
+      const savedLastSync = localStorage.getItem(STORAGE_KEYS.LAST_SYNC);
+      const savedFileId = localStorage.getItem(STORAGE_KEYS.FILE_ID);
+      const savedAutoSync = localStorage.getItem(STORAGE_KEYS.AUTO_SYNC);
+      const savedCustomClientId = localStorage.getItem(STORAGE_KEYS.CUSTOM_CLIENT_ID);
+      const savedIsGuest = localStorage.getItem(STORAGE_KEYS.IS_GUEST);
+      const savedDemoMode = localStorage.getItem(STORAGE_KEYS.DEMO_MODE);
+
+      if (savedIsGuest === 'true') {
+        setIsGuest(true);
+        setShowDashboard(true);
+      }
+      if (savedCustomClientId) setCustomClientId(savedCustomClientId);
+      if (savedAutoSync !== null) setIsAutoSyncEnabled(savedAutoSync === 'true');
+      if (savedFileId) setCloudFileId(savedFileId);
+      if (savedLastSync) setCloudLastSync(savedLastSync);
+
+      if (savedCloudUser) {
+        try {
+          const userObj = JSON.parse(savedCloudUser);
+          if (userObj && isAuthorizedBRACUStudent(userObj.email)) {
+            const isDemo = savedDemoMode === 'true';
+            const savedToken = localStorage.getItem(STORAGE_KEYS.TOKEN);
+            if (isDemo) {
+              setCloudUser(userObj);
+              setShowDashboard(true);
+              setCloudSyncStatus('synced');
+            } else if (savedToken && !isGoogleTokenExpired()) {
+              setCloudUser(userObj);
+              setShowDashboard(true);
+              setCloudSyncStatus('synced');
+            } else {
+              // Token expired — clear cloud session and send user back to homepage
+              localStorage.removeItem(STORAGE_KEYS.USER);
+              localStorage.removeItem(STORAGE_KEYS.TOKEN);
+              localStorage.removeItem(STORAGE_KEYS.TOKEN_EXP);
+              localStorage.removeItem(STORAGE_KEYS.FILE_ID);
+              localStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
+              localStorage.removeItem(STORAGE_KEYS.DEMO_MODE);
+              localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+              // User stays on homepage (showDashboard remains false)
+            }
+          } else {
+            localStorage.removeItem(STORAGE_KEYS.USER);
+          }
+        } catch {
+          localStorage.removeItem(STORAGE_KEYS.USER);
+        }
+      }
     } catch (e) {
       console.error("Failed to load state from localStorage:", e);
     }
   }, []);
+
+  // Periodic session-expiry guard: if the Google token expires while the user is
+  // using the tracker, automatically sign them out and return to the landing page.
+  useEffect(() => {
+    if (!isMounted || !cloudUser) return;
+    const isDemo = localStorage.getItem(STORAGE_KEYS.DEMO_MODE) === 'true';
+    if (isDemo) return; // demo sessions never expire
+
+    const checkInterval = setInterval(() => {
+      if (isGoogleTokenExpired()) {
+        clearInterval(checkInterval);
+        // Full logout — mirrors handleCloudSignOut
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (token) revokeGoogleToken(token).catch(() => {});
+        setCloudUser(null);
+        setIsGuest(false);
+        setCloudSyncStatus('unauthenticated');
+        setCloudLastSync(null);
+        setCloudFileId(null);
+        setGatekeeperError(null);
+        setShowDashboard(false);
+        localStorage.removeItem(STORAGE_KEYS.USER);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN_EXP);
+        localStorage.removeItem(STORAGE_KEYS.FILE_ID);
+        localStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
+        localStorage.removeItem(STORAGE_KEYS.DEMO_MODE);
+        localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+        showCloudToast("Session expired. Please sign in again or continue as guest.");
+      }
+    }, 60_000); // check every 60 seconds
+
+    return () => clearInterval(checkInterval);
+  }, [isMounted, cloudUser]);
 
   // Trigger Recommended Curriculum Modal if user completes onboarding and has 0 courses
   useEffect(() => {
@@ -831,7 +928,6 @@ export default function Home() {
     localStorage.removeItem("bracu_course_tracker_state");
     localStorage.removeItem("bracu_cse_tracker_welcome_shown");
     localStorage.removeItem("flow136_view_mode");
-    localStorage.removeItem("flow136_tutorial_completed");
     window.location.reload();
   };
 
@@ -939,6 +1035,15 @@ export default function Home() {
   const handleToggleViewMode = (mode: 'list' | 'kanban') => {
     setViewMode(mode);
     localStorage.setItem("flow136_view_mode", mode);
+  };
+
+  // Toggle semester sort order (First to Last vs Last to First)
+  const handleToggleSemesterSort = (order?: 'asc' | 'desc') => {
+    const nextOrder = order || (semesterSortOrder === 'asc' ? 'desc' : 'asc');
+    setSemesterSortOrder(nextOrder);
+    try {
+      localStorage.setItem("flow136_semester_sort", nextOrder);
+    } catch {}
   };
 
   // Move a course from one semester to another via drag-and-drop (Atomic state transition)
@@ -1054,27 +1159,16 @@ export default function Home() {
     updateSemesters(updated);
   };
 
-  // Simulated semesters for the tutorial step 10 to show Repeat ROI boost example
-  const simulatedSemesters = useMemo(() => {
-    if (tutorialStep === 9) {
-      if (semesters.length > 0) {
-        return semesters.map((sem, idx) => {
-          if (idx === 0) {
-            const hasCSE110 = sem.courses.some(c => c.code === "CSE110");
-            const newCourses = hasCSE110
-              ? sem.courses.map(c => c.code === "CSE110" ? { ...c, isCompleted: true, grade: "B-" } : c)
-              : [...sem.courses, { code: "CSE110", isCompleted: true, grade: "B-" }];
-            return {
-              ...sem,
-              courses: newCourses
-            };
-          }
-          return sem;
-        });
-      }
+  const simulatedSemesters = semesters;
+
+  // Semesters ordered for UI display according to user preference (First to Last vs Last to First)
+  const displayedSemesters = useMemo(() => {
+    const list = simulatedSemesters.map((sem, originalIdx) => ({ sem, originalIdx }));
+    if (semesterSortOrder === 'desc') {
+      return list.slice().reverse();
     }
-    return semesters;
-  }, [semesters, tutorialStep]);
+    return list;
+  }, [simulatedSemesters, semesterSortOrder]);
 
   // Unique courses dictionary representing the most recent attempts
   // Needed for "Math Rule" (factoring in only newest attempt into credit count and cumulative CGPA)
@@ -1083,13 +1177,36 @@ export default function Home() {
 
     simulatedSemesters.forEach((sem, semIdx) => {
       sem.courses.forEach(c => {
-        // Chronologically latest attempt always replaces any previous attempt
-        result[c.code] = { semesterIdx: semIdx, course: c };
+        const existing = result[c.code];
+        if (!existing) {
+          result[c.code] = { semesterIdx: semIdx, course: c };
+        } else {
+          // Check if current or existing attempt has a grade or is completed
+          const currentHasGrade = !!(c.grade && GRADING_SCALE[c.grade] !== undefined);
+          const existingHasGrade = !!(existing.course.grade && GRADING_SCALE[existing.course.grade] !== undefined);
+
+          const currentIsActive = mode === 'tracker'
+            ? c.isCompleted
+            : (c.isCompleted || currentHasGrade);
+          const existingIsActive = mode === 'tracker'
+            ? existing.course.isCompleted
+            : (existing.course.isCompleted || existingHasGrade);
+
+          if (currentIsActive) {
+            // A newer active (graded/completed) attempt replaces any prior attempt
+            result[c.code] = { semesterIdx: semIdx, course: c };
+          } else if (!existingIsActive) {
+            // If neither attempt is active/graded, track the latest placeholder
+            result[c.code] = { semesterIdx: semIdx, course: c };
+          }
+          // If existing is active (graded) and current is an untaken placeholder in a later semester,
+          // PRESERVE the existing active attempt so planned future courses do not wipe out completed grades!
+        }
       });
     });
 
     return result;
-  }, [simulatedSemesters]);
+  }, [simulatedSemesters, mode]);
 
   const isCourseMandatory = useCallback((code: string) => {
     const c = COURSES.find(co => co.code === code);
@@ -1422,7 +1539,7 @@ export default function Home() {
         totalLoad += credits;
 
         let isComp = c.isCompleted;
-        if (mode === 'gpa' && isComp && c.grade && GRADING_SCALE[c.grade] !== undefined) {
+        if (mode === 'gpa' && (isComp || !!c.grade) && c.grade && GRADING_SCALE[c.grade] !== undefined) {
           gradableCredits += credits;
           totalPoints += GRADING_SCALE[c.grade] * credits;
           hasGrades = true;
@@ -1449,7 +1566,7 @@ export default function Home() {
 
         let isComp = mode === 'tracker' 
           ? c.isCompleted 
-          : (c.isCompleted && c.grade !== "" && c.grade !== "F");
+          : ((c.isCompleted || !!c.grade) && c.grade !== "" && c.grade !== "F");
         if (c.code === "CSE400") {
           isComp = isCSE400Passed;
         }
@@ -1478,11 +1595,15 @@ export default function Home() {
 
       if (courseData?.category === "Non-Credit") return;
 
-      let isComp = course.isCompleted;
       if (code === "CSE400") {
-        isComp = isCSE400Passed;
+        if (mode === 'gpa' && isCSE400Passed && course.grade && GRADING_SCALE[course.grade] !== undefined) {
+          totalCgpaCredits += credits;
+          totalCgpaPoints += GRADING_SCALE[course.grade] * credits;
+        }
+        return;
       }
-      if (mode === 'gpa' && isComp && course.grade && GRADING_SCALE[course.grade] !== undefined) {
+
+      if (mode === 'gpa' && course.grade && GRADING_SCALE[course.grade] !== undefined) {
         totalCgpaCredits += credits;
         totalCgpaPoints += GRADING_SCALE[course.grade] * credits;
       }
@@ -1841,28 +1962,158 @@ export default function Home() {
     };
   }, [semesters, mode, isCSE400Passed, onboardingData.pathway, onboardingData.creditOption, onboardingData.engStatusPriorToRS]);
 
+  // Helper for English ordinal suffixes (1st, 2nd, 3rd, 4th, etc.)
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
+  const nextPredictedIntake = useMemo(() => {
+    const lastSemIdx = semesters.length - 1;
+    const lastIntake = semesterIntakes[lastSemIdx];
+    if (!lastIntake) {
+      return { term: (onboardingData.startingTerm || 'Spring') as 'Spring' | 'Summer' | 'Fall', year: onboardingData.startingYear || 2025 };
+    }
+    if (lastIntake.term === 'Spring') {
+      return { term: 'Summer' as const, year: lastIntake.year };
+    } else if (lastIntake.term === 'Summer') {
+      return { term: 'Fall' as const, year: lastIntake.year };
+    } else {
+      return { term: 'Spring' as const, year: lastIntake.year + 1 };
+    }
+  }, [semesters, semesterIntakes, onboardingData.startingTerm, onboardingData.startingYear]);
+
   // Semester cards operations
   const handleAddSemester = () => {
     const nextIdx = semesters.length + 1;
     const newSem: Semester = {
       id: `sem-custom-${Date.now()}`,
-      name: `${nextIdx}th Semester`,
-      courses: []
+      name: `${getOrdinal(nextIdx)} Semester`,
+      term: nextPredictedIntake.term,
+      year: nextPredictedIntake.year,
+      courses: [],
+      isCollapsed: false,
     };
     updateSemesters([...semesters, newSem]);
+  };
+
+  // Floating Action: Add Semester and open focused modal with live course search
+  const handleTriggerAddSemester = () => {
+    const nextIdx = semesters.length + 1;
+    const newSem: Semester = {
+      id: `sem-custom-${Date.now()}`,
+      name: `${getOrdinal(nextIdx)} Semester`,
+      term: nextPredictedIntake.term,
+      year: nextPredictedIntake.year,
+      courses: [],
+      isCollapsed: false,
+    };
+    const nextSemesters = [...semesters, newSem];
+    updateSemesters(nextSemesters);
+    setFocusedSemesterForModal(newSem);
+    setIsAddSemesterModalOpen(true);
+  };
+
+  // Floating Action: Commit Add Courses with duplicate move/retake resolution
+  const handleCommitAddCourses = (
+    assignments: {
+      courseCode: string;
+      targetSemId: string;
+      resolution?: 'move' | 'repeat';
+      originalSemId?: string;
+    }[]
+  ) => {
+    let nextSemesters = [...semesters];
+
+    assignments.forEach(({ courseCode, targetSemId, resolution, originalSemId }) => {
+      // If resolution is 'move' and originalSemId exists, remove from original semester
+      if (resolution === 'move' && originalSemId) {
+        nextSemesters = nextSemesters.map(s => {
+          if (s.id === originalSemId) {
+            return {
+              ...s,
+              courses: s.courses.filter(c => c.code !== courseCode)
+            };
+          }
+          return s;
+        });
+      }
+
+      // Add to targetSemId
+      nextSemesters = nextSemesters.map(s => {
+        if (s.id === targetSemId) {
+          const exists = s.courses.some(c => c.code === courseCode);
+          if (exists) return s;
+
+          return {
+            ...s,
+            courses: [
+              ...s.courses,
+              {
+                code: courseCode,
+                grade: "",
+                isCompleted: false,
+                isRepeat: resolution === 'repeat'
+              }
+            ]
+          };
+        }
+        return s;
+      });
+    });
+
+    updateSemesters(nextSemesters);
   };
 
   const isAnyExpanded = useMemo(() => {
     return semesters.some(sem => !sem.isCollapsed) || !isCapstoneCollapsed;
   }, [semesters, isCapstoneCollapsed]);
 
+  const handleToggleSemesterCollapse = (semId: string) => {
+    setSemesters(prev => {
+      const updated = prev.map(s => s.id === semId ? { ...s, isCollapsed: !s.isCollapsed } : s);
+      setTimeout(() => {
+        try {
+          saveStateToLocalStorage(
+            mode,
+            isOnboarded,
+            updated,
+            thesisTrack,
+            thesisSteps,
+            projectCompleted,
+            internshipCompleted,
+            onboardingData
+          );
+        } catch {}
+      }, 0);
+      return updated;
+    });
+  };
+
   const handleToggleAllCollapse = () => {
     const targetState = isAnyExpanded;
-    const updated = semesters.map(sem => ({
-      ...sem,
-      isCollapsed: targetState
-    }));
-    updateSemesters(updated);
+    setSemesters(prev => {
+      const updated = prev.map(sem => ({
+        ...sem,
+        isCollapsed: targetState
+      }));
+      setTimeout(() => {
+        try {
+          saveStateToLocalStorage(
+            mode,
+            isOnboarded,
+            updated,
+            thesisTrack,
+            thesisSteps,
+            projectCompleted,
+            internshipCompleted,
+            onboardingData
+          );
+        } catch {}
+      }, 0);
+      return updated;
+    });
     setIsCapstoneCollapsed(targetState);
   };
 
@@ -1952,6 +2203,19 @@ export default function Home() {
     updateSemesters(updated);
   };
 
+  const handleClearSemesterCourses = (semId: string) => {
+    const updated = semesters.map(sem => {
+      if (sem.id === semId) {
+        return {
+          ...sem,
+          courses: []
+        };
+      }
+      return sem;
+    });
+    updateSemesters(updated);
+  };
+
   const handleAddCourseToSemester = (semId: string, courseCode: string) => {
     const targetSem = semesters.find(s => s.id === semId);
     if (!targetSem) return;
@@ -2029,6 +2293,372 @@ export default function Home() {
     updateSemesters(updated);
   };
 
+  // Cloud Sync Helpers & Action Handlers
+  const showCloudToast = (msg: string) => {
+    setCloudToastMessage(msg);
+    setTimeout(() => {
+      setCloudToastMessage(prev => prev === msg ? null : prev);
+    }, 4000);
+  };
+
+  const performCloudSync = async (options?: { silent?: boolean; customPayload?: DriveBackupPayload }) => {
+    if (!cloudUser) return;
+
+    const isDemo = localStorage.getItem(STORAGE_KEYS.DEMO_MODE) === 'true';
+    if (!isDemo) {
+      const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+      if (!token || isGoogleTokenExpired()) {
+        // Session expired — auto-logout back to homepage
+        if (token) revokeGoogleToken(token).catch(() => {});
+        setCloudUser(null);
+        setIsGuest(false);
+        setCloudSyncStatus('unauthenticated');
+        setCloudLastSync(null);
+        setCloudFileId(null);
+        setShowDashboard(false);
+        localStorage.removeItem(STORAGE_KEYS.USER);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN_EXP);
+        localStorage.removeItem(STORAGE_KEYS.FILE_ID);
+        localStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
+        localStorage.removeItem(STORAGE_KEYS.DEMO_MODE);
+        localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+        showCloudToast("Session expired. Please sign in again or continue as guest.");
+        return;
+      }
+    }
+
+    setCloudSyncStatus('syncing');
+
+    try {
+      const payload: DriveBackupPayload = options?.customPayload || {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        userEmail: cloudUser.email,
+        mode,
+        isOnboarded,
+        semesters,
+        thesisTrack,
+        thesisSteps,
+        projectCompleted,
+        internshipCompleted,
+        onboardingData,
+        deviceInfo: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown Device',
+        statsSummary: {
+          totalCredits: 136,
+          completedCredits: cumulativeStats?.completedCredits ?? 0,
+          cgpa: cumulativeStats?.cgpa ?? null
+        }
+      };
+
+      let resultFileId = cloudFileId;
+      let syncTimestamp = new Date().toISOString();
+
+      if (isDemo) {
+        const demoRes = saveDemoDriveBackup(payload);
+        resultFileId = demoRes.fileId;
+        syncTimestamp = demoRes.modifiedTime;
+      } else {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) {
+          setCloudSyncStatus('unauthenticated');
+          throw new Error("Google access token expired or missing. Please sign in again.");
+        }
+        const driveRes = await saveDriveBackup(token, payload, cloudFileId || undefined);
+        resultFileId = driveRes.fileId;
+        syncTimestamp = driveRes.modifiedTime;
+      }
+
+      setCloudFileId(resultFileId);
+      setCloudLastSync(syncTimestamp);
+      setCloudSyncStatus('synced');
+      localStorage.setItem(STORAGE_KEYS.FILE_ID, resultFileId || '');
+      localStorage.setItem(STORAGE_KEYS.LAST_SYNC, syncTimestamp);
+
+      if (!options?.silent) {
+        showCloudToast("Progress successfully synced to Google Drive!");
+      }
+    } catch (err: any) {
+      console.warn("Cloud Sync status:", err?.message || err);
+      if (err?.isAuthError) {
+        // Auth error — auto-logout back to homepage
+        const staleToken = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (staleToken) revokeGoogleToken(staleToken).catch(() => {});
+        setCloudUser(null);
+        setIsGuest(false);
+        setCloudSyncStatus('unauthenticated');
+        setCloudLastSync(null);
+        setCloudFileId(null);
+        setShowDashboard(false);
+        localStorage.removeItem(STORAGE_KEYS.USER);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(STORAGE_KEYS.TOKEN_EXP);
+        localStorage.removeItem(STORAGE_KEYS.FILE_ID);
+        localStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
+        localStorage.removeItem(STORAGE_KEYS.DEMO_MODE);
+        localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+        showCloudToast("Session expired. Please sign in again or continue as guest.");
+      } else if (err?.isOffline) {
+        setCloudSyncStatus('offline');
+        if (!options?.silent) {
+          showCloudToast("You are currently offline. Changes are saved locally.");
+        }
+      } else {
+        setCloudSyncStatus('error');
+        if (!options?.silent) {
+          showCloudToast(err?.message || "Cloud sync encountered an issue.");
+        }
+      }
+    }
+  };
+
+  // Auto-Sync Debounce: automatically updates Google Drive when state changes
+  useEffect(() => {
+    if (!isMounted || !cloudUser || !isAutoSyncEnabled || cloudSyncStatus === 'unauthenticated' || cloudSyncStatus === 'error') return;
+
+    if (cloudSyncDebounceTimer.current) {
+      clearTimeout(cloudSyncDebounceTimer.current);
+    }
+
+    cloudSyncDebounceTimer.current = setTimeout(() => {
+      performCloudSync({ silent: true });
+    }, 4000);
+
+    return () => {
+      if (cloudSyncDebounceTimer.current) {
+        clearTimeout(cloudSyncDebounceTimer.current);
+      }
+    };
+  }, [
+    isMounted,
+    cloudUser,
+    cloudSyncStatus,
+    isAutoSyncEnabled,
+    semesters,
+    mode,
+    isOnboarded,
+    thesisTrack,
+    thesisSteps,
+    projectCompleted,
+    internshipCompleted,
+    onboardingData
+  ]);
+
+  const handleCloudSignIn = async (simulatedEmail?: string) => {
+    setGatekeeperError(null);
+    setIsAuthenticating(true);
+
+    try {
+      if (simulatedEmail) {
+        // Simulation / Demo Mode (tests @g.bracu.ac.bd validation or rejection)
+        const user = simulateStudentLogin(simulatedEmail);
+        setCloudUser(user);
+        setCloudSyncStatus('synced');
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+        localStorage.setItem(STORAGE_KEYS.DEMO_MODE, 'true');
+
+        const existing = loadDemoDriveBackup();
+        if (existing) {
+          setCloudConflictPayload(existing);
+          setShowCloudConflictModal(true);
+        } else {
+          saveDemoDriveBackup({
+            version: 1,
+            updatedAt: new Date().toISOString(),
+            userEmail: user.email,
+            mode,
+            isOnboarded,
+            semesters,
+            thesisTrack,
+            thesisSteps,
+            projectCompleted,
+            internshipCompleted,
+            onboardingData
+          });
+          const nowIso = new Date().toISOString();
+          setCloudLastSync(nowIso);
+          localStorage.setItem(STORAGE_KEYS.LAST_SYNC, nowIso);
+        }
+
+        showCloudToast(`Welcome, ${user.name}! Connected to Google Drive.`);
+        setIsGuest(false);
+        try {
+          localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+        } catch {}
+        setShowDashboard(true);
+        setIsAuthenticating(false);
+        return;
+      }
+
+      // Real Google Identity Services Flow
+      const activeClientId = customClientId.trim() || DEFAULT_GSI_CLIENT_ID;
+      if (!activeClientId) {
+        setShowClientIdInput(true);
+        throw new Error("Google OAuth Client ID is required. Enter your Google Client ID below or try Demo Mode.");
+      }
+
+      const token = await requestGoogleAccessToken(activeClientId);
+      localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+
+      // Fetch user profile and strictly enforce Auth Gatekeeper
+      const user = await fetchGoogleUserProfile(token);
+      setCloudUser(user);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+      localStorage.removeItem(STORAGE_KEYS.DEMO_MODE);
+      setIsGuest(false);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+      } catch {}
+      setShowDashboard(true);
+
+      // Check existing backup in Google Drive appDataFolder
+      const existingFile = await findDriveBackupFile(token);
+      if (existingFile) {
+        setCloudFileId(existingFile.id);
+        localStorage.setItem(STORAGE_KEYS.FILE_ID, existingFile.id);
+
+        const remoteBackup = await loadDriveBackup(token, existingFile.id);
+        if (remoteBackup) {
+          setCloudConflictPayload(remoteBackup);
+          setShowCloudConflictModal(true);
+        }
+      } else {
+        await performCloudSync({ silent: true });
+      }
+
+      setCloudSyncStatus('synced');
+      showCloudToast(`Welcome, ${user.name}! Cloud sync active.`);
+    } catch (err: any) {
+      console.error("Sign-in failed:", err);
+      if ((err as any).isGatekeeperError) {
+        setGatekeeperError(err.message);
+      } else {
+        showCloudToast(err.message || "Failed to sign in with Google.");
+      }
+      setCloudSyncStatus('unauthenticated');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleContinueAsGuest = () => {
+    setIsGuest(true);
+    try {
+      localStorage.setItem(STORAGE_KEYS.IS_GUEST, 'true');
+    } catch (e) {
+      console.error("Failed to persist guest mode:", e);
+    }
+    setGatekeeperError(null);
+    setShowDashboard(true);
+  };
+
+  const handleBackupToCloud = async () => {
+    if (!cloudUser) {
+      setShowCloudModal(true);
+      return;
+    }
+    showCloudToast("Syncing to Google Drive...");
+    await performCloudSync();
+  };
+
+  const handleRestoreFromCloudClick = async () => {
+    if (!cloudUser) {
+      setShowCloudModal(true);
+      return;
+    }
+    showCloudToast("Fetching backup from Google Drive...");
+    try {
+      const isDemo = localStorage.getItem(STORAGE_KEYS.DEMO_MODE) === 'true';
+      let backupPayload: DriveBackupPayload | null = null;
+      if (isDemo) {
+        backupPayload = loadDemoDriveBackup();
+      } else {
+        const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+        if (!token) throw new Error("Google access token missing. Please sign in again.");
+        const file = await findDriveBackupFile(token);
+        if (file) {
+          backupPayload = await loadDriveBackup(token, file.id);
+        }
+      }
+      if (backupPayload) {
+        handleRestoreFromCloud(backupPayload);
+      } else {
+        showCloudToast("No cloud backup found on Google Drive.");
+      }
+    } catch (err: any) {
+      showCloudToast(err?.message || "Failed to restore from Google Drive.");
+    }
+  };
+
+  const handleCloudSignOut = async () => {
+    const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+    if (token) {
+      revokeGoogleToken(token).catch(() => {});
+    }
+    setCloudUser(null);
+    setIsGuest(false);
+    setCloudSyncStatus('unauthenticated');
+    setCloudLastSync(null);
+    setCloudFileId(null);
+    setGatekeeperError(null);
+    setShowDashboard(false);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    localStorage.removeItem(STORAGE_KEYS.TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.TOKEN_EXP);
+    localStorage.removeItem(STORAGE_KEYS.FILE_ID);
+    localStorage.removeItem(STORAGE_KEYS.LAST_SYNC);
+    localStorage.removeItem(STORAGE_KEYS.DEMO_MODE);
+    localStorage.removeItem(STORAGE_KEYS.IS_GUEST);
+    showCloudToast("Signed out of Google Drive Cloud Sync.");
+  };
+
+  const handleRestoreFromCloud = (backupData?: DriveBackupPayload) => {
+    const targetPayload = backupData || cloudConflictPayload;
+    if (!targetPayload) return;
+
+    if (targetPayload.mode) setMode(targetPayload.mode);
+    if (targetPayload.isOnboarded !== undefined) setIsOnboarded(targetPayload.isOnboarded);
+    if (targetPayload.semesters && Array.isArray(targetPayload.semesters)) {
+      const sanitized = targetPayload.semesters.map((s: Semester) => ({
+        ...s,
+        courses: dedupeSemesterCourses(s.courses || [])
+      }));
+      setSemesters(sanitized);
+    }
+    if (targetPayload.thesisTrack) setThesisTrack(targetPayload.thesisTrack);
+    if (targetPayload.thesisSteps) setThesisSteps(targetPayload.thesisSteps);
+    if (targetPayload.projectCompleted !== undefined) setProjectCompleted(targetPayload.projectCompleted);
+    if (targetPayload.internshipCompleted !== undefined) setInternshipCompleted(targetPayload.internshipCompleted);
+    if (targetPayload.onboardingData) setOnboardingData(targetPayload.onboardingData);
+
+    saveStateToLocalStorage(
+      targetPayload.mode,
+      targetPayload.isOnboarded,
+      targetPayload.semesters,
+      targetPayload.thesisTrack,
+      targetPayload.thesisSteps,
+      targetPayload.projectCompleted,
+      targetPayload.internshipCompleted,
+      targetPayload.onboardingData
+    );
+
+    setShowCloudConflictModal(false);
+    setCloudConflictPayload(null);
+    showCloudToast("Curriculum successfully restored from Google Drive!");
+  };
+
+  const handleSaveCustomClientId = (newId: string) => {
+    setCustomClientId(newId);
+    if (newId.trim()) {
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_CLIENT_ID, newId.trim());
+      showCloudToast("Custom Google Client ID saved.");
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.CUSTOM_CLIENT_ID);
+      showCloudToast("Reset to default Client ID.");
+    }
+    setShowClientIdInput(false);
+  };
+
   const cse400Course = useMemo(() => {
     for (const sem of semesters) {
       const found = sem.courses.find(c => c.code === "CSE400");
@@ -2088,16 +2718,20 @@ export default function Home() {
   const handleToggleSemesterAllCompleted = (semId: string) => {
     const sem = semesters.find(s => s.id === semId);
     if (!sem) return;
-    const allCompleted = sem.courses.every(c => c.isCompleted);
+    const targetCourses = sem.courses.filter(c => c.code !== "CSE400");
+    const allCompleted = targetCourses.length > 0 && targetCourses.every(c => c.isCompleted);
     const updated = semesters.map(s => {
       if (s.id === semId) {
         return {
           ...s,
-          courses: s.courses.map(c => ({
-            ...c,
-            isCompleted: !allCompleted,
-            grade: allCompleted ? "" : (c.grade || "")
-          }))
+          courses: s.courses.map(c => {
+            if (c.code === "CSE400") return c;
+            return {
+              ...c,
+              isCompleted: !allCompleted,
+              grade: allCompleted ? "" : (c.grade || "")
+            };
+          })
         };
       }
       return s;
@@ -2256,7 +2890,7 @@ export default function Home() {
 
   const CSE400 = ({ isCollapsed, onToggle }: { isCollapsed: boolean; onToggle: () => void }) => {
     return (
-      <div className="bg-[#08080d]/95 border border-purple-500/30 rounded-3xl p-6 backdrop-blur-md shadow-2xl relative overflow-hidden mt-8">
+      <div className="bg-[#070913]/90 border border-purple-500/30 rounded-3xl p-6 backdrop-blur-md shadow-2xl relative overflow-hidden h-full flex flex-col justify-between">
         <div className="absolute top-0 right-0 h-40 w-40 bg-purple-500/[0.04] rounded-full blur-3xl pointer-events-none" />
         
         <div className={`flex flex-wrap items-center justify-between gap-3 ${isCollapsed ? "" : "border-b border-white/[0.06] pb-5 mb-6"}`}>
@@ -2543,137 +3177,6 @@ export default function Home() {
     );
   };
 
-  const renderTutorial = () => {
-    if (tutorialStep === null || tutorialStep < 1 || tutorialStep > 12) return null;
-
-    const tourSteps = [
-      {
-        title: "1. Welcome to Flow136!",
-        desc: "Welcome to your curriculum companion. Please click on the 'Continue to Tracker' button on the landing page to enter the app and begin the tour!",
-      },
-      {
-        title: "2. Starting Pathway Status",
-        desc: "First, choose your starting entry point (Pathway A or Pathway B) based on your freshman entry courses, select any remedial options, and click 'Continue'.",
-      },
-      {
-        title: "3. RS & English Placement",
-        desc: "Select your target RS Semester, starting intake (Term & Year), and English status prior to RS, then click 'Next Step' to continue.",
-      },
-      {
-        title: "4. Generate Study Plan",
-        desc: "Review your generated layout summary. If you need to change anything, click 'Back' to adjust details (the tutorial will wait). Once verified, click 'Generate Plan'!",
-      },
-      {
-        title: "5. Welcome to the Dashboard",
-        desc: "Welcome to your active planner dashboard! Notice that Flow136 supports two tracking modes: Course Tracker (left) and Course + CGPA Planner (right). Click 'Next' to proceed.",
-      },
-      {
-        title: "6. Sidebar Requirements",
-        desc: "Look at the sidebar. Click on any category (like 'Program Core' or 'GenEd Streams') to view its courses, track credit completion, or add courses directly.",
-      },
-      {
-        title: "7. CGPA Planner Mode",
-        desc: "Let's explore the GPA calculators. Please switch over to 'Course + CGPA Planner' mode by clicking the toggler in the header.",
-      },
-      {
-        title: "8. GPA Solver & ROI Analyzer",
-        desc: "In GPA mode, you can use the Target Solver to see required grade averages, and the Repeat ROI Analyzer to discover retake choices.",
-      },
-      {
-        title: "9. Repeat ROI Simulation",
-        desc: "For example: we temporarily added CSE110 in Semester 1 with a grade of 2.7 (B-). The analyzer shows that retaking it and scoring a 4.0 (A) will boost your overall CGPA. Click 'Next' to clean up this sample.",
-      },
-      {
-        title: "10. View Layout Modes",
-        desc: "Customize your timeline view. Switch between the vertical 'List View' feed and the horizontal 'Kanban Board' layout in the header. Click 'Next' to proceed.",
-      },
-      {
-        title: "11. Export & Backups",
-        desc: "Open the Hamburger menu (≡) in the header. Here you can backup/export your plan, restore data, or take a gradesheet snapshot of your progress.",
-      },
-      {
-        title: "12. Suggested Pathways",
-        desc: "If you ever get confused, click the 'Feeling lost?' button to see the recommended curriculum pathway flow. That concludes our tour! Click 'Finish' to begin!",
-      },
-    ];
-
-    const currentStepData = tourSteps[tutorialStep - 1];
-    if (!currentStepData) return null;
-
-    let stepTitle = currentStepData.title;
-    let stepDesc = currentStepData.desc;
-
-    // Boundary correction: If user went back in the wizard on step 4, pause instructions
-    if (tutorialStep === 4 && wizardStep < 3) {
-      stepTitle = "Adjusting Onboarding Settings...";
-      stepDesc = "Please finish adjusting your choices in the setup wizard and click 'Continue' to return to the 'Generate Your Study Plan' page to resume the tour.";
-    }
-
-    const isNextHidden = [2, 3, 4].includes(tutorialStep) && !isOnboarded;
-
-    return (
-      <div style={popoverStyle} className="w-[calc(100vw-32px)] md:w-96 px-4 md:px-0">
-        <div className="bg-[#09090b]/95 border border-slate-800 backdrop-blur-md rounded-2xl p-5 shadow-[0_0_30px_rgba(99,102,241,0.15)] flex flex-col gap-3 relative overflow-hidden text-left">
-          {/* Ambient glow inside popover */}
-          <div className="absolute -top-10 -left-10 w-24 h-24 rounded-full bg-indigo-500/10 blur-xl pointer-events-none" />
-          
-          <div className="flex items-center justify-between z-10">
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-              Tutorial &bull; Step {tutorialStep} of {tourSteps.length}
-            </span>
-            <button
-              onClick={() => {
-                try {
-                  localStorage.setItem("flow136_tutorial_completed", "true");
-                } catch (error) {
-                  console.error("Local storage error:", error);
-                }
-                setTutorialStep(null);
-              }}
-              className="text-slate-450 hover:text-indigo-400 transition text-[10px] uppercase font-bold cursor-pointer"
-            >
-              Skip
-            </button>
-          </div>
-
-          <div className="space-y-1 z-10">
-            <h4 className="text-sm font-bold text-slate-100">{stepTitle}</h4>
-            <p className="text-xs text-slate-300 leading-relaxed">{stepDesc}</p>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden z-10 border border-slate-800/40">
-            <div 
-              className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full transition-all duration-300"
-              style={{ width: `${(tutorialStep / tourSteps.length) * 100}%` }}
-            />
-          </div>
-
-          <div className="flex justify-between items-center mt-2 z-10">
-            <button
-              disabled={tutorialStep === 1 || (isOnboarded && tutorialStep === 5)}
-              onClick={() => handleTutorialStepChange(tutorialStep - 1)}
-              className="px-3 py-1.5 rounded-lg border border-slate-800 bg-zinc-900/50 hover:bg-zinc-800 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer transition disabled:opacity-30 disabled:pointer-events-none"
-            >
-              Back
-            </button>
-            {isNextHidden ? (
-              <span className="text-[10px] font-medium text-slate-400 italic animate-pulse">
-                Follow instructions to proceed...
-              </span>
-            ) : (
-              <button
-                onClick={() => handleTutorialStepChange(tutorialStep + 1)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-slate-100 px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shadow-md transition-all duration-200 shadow-indigo-600/10 hover:shadow-indigo-600/20"
-              >
-                {tutorialStep === tourSteps.length ? "Finish" : "Next"}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
   if (!isMounted) {
     return (
       <div className="min-h-screen w-full bg-[#030303] bg-gradient-to-b from-[#050507] via-[#09090b] to-[#0d0d12] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden animate-pulse">
@@ -2735,18 +3238,20 @@ export default function Home() {
 
   const currentLayout = viewMode;
 
-  if (!showDashboard) {
+  // 🚀 LANDING PAGE VIEW (Shown by default on first visit or when unauthenticated)
+  // 🚀 LANDING PAGE VIEW (Shown by default on first visit or when unauthenticated)
+  if (!showDashboard || (!cloudUser && !isGuest)) {
     return (
-      <div className="min-h-screen w-full bg-[#030304] bg-gradient-to-b from-[#030304] via-[#060609] to-[#0a0a0f] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
-        {/* Ambient background glow accents */}
-        <div className="absolute top-[-15%] left-[-8%] w-[50%] h-[50%] rounded-full bg-blue-600/[0.08] blur-[160px] pointer-events-none" />
-        <div className="absolute bottom-[-15%] right-[-8%] w-[50%] h-[50%] rounded-full bg-purple-600/[0.08] blur-[160px] pointer-events-none" />
-        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-indigo-600/[0.05] blur-[180px] pointer-events-none z-0" />
+      <div className="min-h-screen w-full bg-[#030304] bg-gradient-to-b from-[#030304] via-[#070913] to-[#030304] text-slate-100 font-sans antialiased flex flex-col justify-between relative overflow-hidden">
+        {/* Ambient background glow accents: Blue & Indigo */}
+        <div className="absolute top-[-15%] left-[-8%] w-[55%] h-[55%] rounded-full bg-blue-600/[0.08] blur-[160px] pointer-events-none" />
+        <div className="absolute bottom-[-15%] right-[-8%] w-[55%] h-[55%] rounded-full bg-indigo-600/[0.08] blur-[160px] pointer-events-none" />
+        <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full bg-blue-500/[0.05] blur-[180px] pointer-events-none z-0" />
 
         {/* Top Header/Bar for Landing */}
-        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-white/[0.06] relative z-10">
+        <header className="px-6 py-5 max-w-7xl mx-auto w-full flex items-center justify-between border-b border-white/[0.08] relative z-10">
           <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 border border-blue-400/30 flex items-center justify-center shadow-[0_4px_20px_rgba(59,130,246,0.3)] shrink-0">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-indigo-500 border border-indigo-400/30 flex items-center justify-center shadow-[0_4px_25px_rgba(99,102,241,0.35)] shrink-0">
               <svg className="h-5.5 w-5.5 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
               </svg>
@@ -2755,16 +3260,44 @@ export default function Home() {
               Flow136
             </h1>
           </div>
+          <div className="flex items-center gap-3">
+            {cloudUser && (
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/[0.03] border border-white/[0.08]">
+                <div className="h-6 w-6 rounded-full overflow-hidden bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-300 font-bold text-[10px] shrink-0">
+                  {cloudUser.picture ? (
+                    <img src={cloudUser.picture} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span>{cloudUser.name?.[0]?.toUpperCase() || "U"}</span>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-slate-200 hidden sm:inline max-w-[120px] truncate">{cloudUser.name}</span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (!cloudUser && !isGuest) {
+                  handleContinueAsGuest();
+                } else {
+                  setShowDashboard(true);
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 hover:border-blue-400/50 text-xs font-bold text-blue-300 hover:text-white transition-all flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+            >
+              <span>{cloudUser ? "Open Tracker" : (isGuest ? "Open Tracker" : "Enter Tracker")}</span>
+              <ArrowRight className="h-3.5 w-3.5 text-blue-400" />
+            </button>
+          </div>
         </header>
 
         {/* Hero Section */}
         <main className="flex-grow flex flex-col items-center justify-center text-center px-4 py-16 relative z-10 max-w-6xl mx-auto w-full">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs font-semibold text-indigo-300 mb-8 backdrop-blur-md shadow-sm">
-            <GraduationCap className="h-4 w-4 text-indigo-400" />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-xl bg-blue-950/40 border border-blue-500/30 text-xs font-semibold text-blue-300 mb-8 backdrop-blur-md shadow-[0_0_20px_rgba(59,130,246,0.15)]">
+            <GraduationCap className="h-4 w-4 text-blue-400" />
             <span>BRACU CSE Degree Companion</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400 max-w-5xl mx-auto leading-none mb-6">
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-blue-400 max-w-5xl mx-auto leading-none mb-6">
             Welcome to Flow136
           </h1>
 
@@ -2773,86 +3306,223 @@ export default function Home() {
           </p>
 
           <p className="text-xs md:text-sm text-slate-400 font-medium mt-3 mb-10 max-w-md mx-auto leading-relaxed text-center">
-            Interactive progress tracker, prerequisite validator & graduation planner for BRACU CSE.
+            Interactive progress tracker, prerequisite validator &amp; graduation planner for BRACU CSE.
           </p>
 
-          {/* Glowing CTA Button */}
-          <div className="mb-20">
-            <button
-              onClick={() => {
-                setShowDashboard(true);
-                if (tutorialStep === 1) {
-                  handleTutorialStepChange(2);
-                }
-              }}
-              className={`bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white shadow-[0_0_28px_rgba(79,70,229,0.38)] hover:shadow-[0_0_40px_rgba(79,70,229,0.58)] transition-all duration-300 rounded-2xl px-10 py-4.5 font-bold text-base md:text-lg cursor-pointer transform active:scale-95 inline-flex items-center gap-3 border border-blue-400/30 ${getHighlightClass('cta-button')}`}
-              data-tutorial="cta-button"
-            >
-              <span>Continue to Tracker</span>
-              <ArrowRight className="h-5 w-5" />
-            </button>
+          {/* Integrated Decluttered Auth & Access Card */}
+          <div className="w-full max-w-md mx-auto mb-16 bg-[#070913]/95 border border-blue-500/25 rounded-3xl p-6 sm:p-7 backdrop-blur-2xl shadow-[0_20px_70px_rgba(59,130,246,0.15)] relative overflow-hidden flex flex-col gap-4 text-center">
+            {/* Ambient internal card glow */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/[0.10] rounded-full blur-2xl pointer-events-none" />
+
+            {/* Error Denial Alert */}
+            {gatekeeperError && (
+              <div className="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-left space-y-1 animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
+                  <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" />
+                  <span>Access Blocked by Gatekeeper</span>
+                </div>
+                <p className="text-[11px] text-rose-200/90 leading-relaxed font-medium">
+                  {gatekeeperError}
+                </p>
+              </div>
+            )}
+
+            {!cloudUser && !isGuest ? (
+              <>
+                {/* Option A (Primary): Sign in (G-Suite) */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={isAuthenticating}
+                    onClick={() => handleCloudSignIn()}
+                    className="w-full py-3.5 px-4 bg-white hover:bg-slate-100 text-slate-900 font-black text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-3 transition-all shadow-[0_4px_25px_rgba(59,130,246,0.25)] hover:shadow-[0_6px_30px_rgba(59,130,246,0.35)] active:scale-[0.98] cursor-pointer disabled:opacity-60 border border-white"
+                  >
+                    {isAuthenticating ? (
+                      <RefreshCw className="h-4.5 w-4.5 animate-spin text-slate-700" />
+                    ) : (
+                      <svg className="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                      </svg>
+                    )}
+                    <span>{isAuthenticating ? "Connecting to Google..." : "Sign in (G-Suite)"}</span>
+                  </button>
+
+                  <div className="flex items-center justify-center gap-2 text-[11px] text-blue-300/80 font-medium pt-0.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                    </span>
+                    <span>Auto-syncs via Google Drive</span>
+                  </div>
+                </div>
+
+                {/* Clean minimal Divider */}
+                <div className="flex items-center gap-3 py-1">
+                  <div className="flex-1 h-px bg-white/[0.08]" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">OR</span>
+                  <div className="flex-1 h-px bg-white/[0.08]" />
+                </div>
+
+                {/* Option B (Secondary): Continue as Guest */}
+                <button
+                  type="button"
+                  onClick={handleContinueAsGuest}
+                  className="w-full py-3 px-4 text-slate-200 hover:text-white transition-all text-xs font-semibold cursor-pointer rounded-2xl bg-white/[0.03] hover:bg-blue-500/10 border border-white/[0.08] hover:border-blue-500/30 flex items-center justify-center gap-2 group active:scale-[0.98]"
+                >
+                  <span>Continue as Guest (Local Storage Only)</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-blue-400 group-hover:text-blue-300 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </>
+            ) : cloudUser ? (
+              <div className="space-y-3">
+                <div className="p-3 rounded-2xl bg-[#090b16] border border-blue-500/25 flex items-center justify-between text-left">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-xl overflow-hidden bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-300 font-bold text-xs shrink-0">
+                      {cloudUser.picture ? (
+                        <img src={cloudUser.picture} alt={cloudUser.name || "Profile"} className="h-full w-full object-cover" />
+                      ) : (
+                        <span>{cloudUser.name?.[0]?.toUpperCase() || "U"}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{cloudUser.name}</p>
+                      <p className="text-[10px] text-blue-400 font-mono truncate">{cloudUser.email}</p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-300 px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 shrink-0">
+                    <Cloud className="h-3 w-3" />
+                    Synced
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDashboard(true);
+                  }}
+                  className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold text-sm sm:text-base rounded-2xl flex items-center justify-center gap-2.5 shadow-[0_0_28px_rgba(99,102,241,0.4)] hover:shadow-[0_0_40px_rgba(99,102,241,0.6)] transition-all cursor-pointer active:scale-[0.98] border border-indigo-400/40"
+                >
+                  <span>Open Degree Tracker</span>
+                  <ArrowRight className="h-5 w-5 text-white" />
+                </button>
+
+                <div className="flex items-center justify-center gap-3 text-xs text-zinc-400 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCloudSignOut}
+                    className="text-zinc-400 hover:text-rose-400 transition cursor-pointer"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 rounded-2xl bg-[#090b16] border border-blue-500/25 flex items-center justify-between text-left">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white">Guest Session</p>
+                      <p className="text-[10px] text-blue-400/80">Stored locally on this device</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold text-blue-300 px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 shrink-0">
+                    Local Only
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDashboard(true);
+                  }}
+                  className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold text-sm sm:text-base rounded-2xl flex items-center justify-center gap-2.5 shadow-[0_0_28px_rgba(99,102,241,0.4)] hover:shadow-[0_0_40px_rgba(99,102,241,0.6)] transition-all cursor-pointer active:scale-[0.98] border border-indigo-400/40"
+                >
+                  <span>Open Degree Tracker</span>
+                  <ArrowRight className="h-5 w-5 text-white" />
+                </button>
+
+                <div className="flex items-center justify-center gap-3 text-xs pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGuest(false);
+                      try { localStorage.removeItem(STORAGE_KEYS.IS_GUEST); } catch {}
+                    }}
+                    className="text-blue-400 hover:text-blue-300 font-semibold transition cursor-pointer"
+                  >
+                    Sign in with BRACU account for cloud backup
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Feature Highlights Grid */}
           <div className="w-full">
             <div className="text-center mb-10">
-              <h2 className="text-xs uppercase tracking-widest text-slate-400 font-bold">Core Features</h2>
-              <div className="h-1 w-12 bg-gradient-to-r from-blue-500 to-indigo-500 mx-auto mt-2 rounded-full" />
+              <h2 className="text-xs uppercase tracking-widest text-blue-400 font-bold">Core Features</h2>
+              <div className="h-1 w-12 bg-gradient-to-r from-blue-500 to-indigo-500 mx-auto mt-2 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-5">
               {/* Feature 1 */}
-              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-blue-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
-                <div className="h-12 w-12 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+              <div className="bg-[#070913]/90 border border-blue-500/20 hover:border-blue-500/45 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.15)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/25 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.25)]">
                   <GraduationCap className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA Tracker</h3>
+                <h3 className="text-sm font-bold text-white mb-2">CGPA Tracker</h3>
                 <p className="text-xs text-slate-400 leading-relaxed font-normal">
                   Log grades, track semester GPAs, and monitor cumulative progress dynamically.
                 </p>
               </div>
 
               {/* Feature 2 */}
-              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-purple-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(168,85,247,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
-                <div className="h-12 w-12 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400 mb-4 group-hover:bg-purple-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+              <div className="bg-[#070913]/90 border border-blue-500/20 hover:border-blue-500/45 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.15)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/25 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.25)]">
                   <BookOpen className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">GenEd Progress</h3>
+                <h3 className="text-sm font-bold text-white mb-2">GenEd Progress</h3>
                 <p className="text-xs text-slate-400 leading-relaxed font-normal">
                   Auto-validate GenEd stream distributions and ensure all graduation credits align.
                 </p>
               </div>
 
               {/* Feature 3 */}
-              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-emerald-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(16,185,129,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
-                <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 mb-4 group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+              <div className="bg-[#070913]/90 border border-blue-500/20 hover:border-blue-500/45 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.15)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/25 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.25)]">
                   <TrendingUp className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">CGPA ROI Analyzer</h3>
-                <p className="text-xs text-slate-450 leading-relaxed font-normal">
-                  Analyze retake options and see the exact return on investment for grade improvements.
+                <h3 className="text-sm font-bold text-white mb-2">Visual Analytics</h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-normal">
+                  Visualize your historical GPA growth and trendline trajectory semester by semester.
                 </p>
               </div>
 
               {/* Feature 4 */}
-              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-amber-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(245,158,11,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
-                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 mb-4 group-hover:bg-amber-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+              <div className="bg-[#070913]/90 border border-blue-500/20 hover:border-blue-500/45 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.15)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/25 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.25)]">
                   <Target className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">Target Calculator</h3>
+                <h3 className="text-sm font-bold text-white mb-2">Target Calculator</h3>
                 <p className="text-xs text-slate-400 leading-relaxed font-normal">
-                  Solve exactly what GPAs you need in future semesters to reach your target goals.
+                  Solve exactly what GPAs you need in future semesters to reach your graduation goals.
                 </p>
               </div>
 
               {/* Feature 5 */}
-              <div className="bg-[#08080d]/80 border border-white/[0.08] hover:border-rose-500/40 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(244,63,94,0.12)] transition-all duration-300 group hover:-translate-y-1.5">
-                <div className="h-12 w-12 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 mb-4 group-hover:bg-rose-500/20 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
+              <div className="bg-[#070913]/90 border border-blue-500/20 hover:border-blue-500/45 rounded-3xl p-6 backdrop-blur-xl flex flex-col items-center text-center shadow-[0_8px_30px_rgba(0,0,0,0.6)] hover:shadow-[0_12px_40px_rgba(59,130,246,0.15)] transition-all duration-300 group hover:-translate-y-1.5">
+                <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/25 group-hover:scale-110 transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.25)]">
                   <Camera className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 mb-2">Snapshot Progress</h3>
+                <h3 className="text-sm font-bold text-white mb-2">Snapshot Progress</h3>
                 <p className="text-xs text-slate-400 leading-relaxed font-normal">
-                  Instantly download your official curriculum progress as a crisp PNG image.
+                  Instantly download your official curriculum progress as a crisp PNG grade sheet.
                 </p>
               </div>
             </div>
@@ -2860,7 +3530,7 @@ export default function Home() {
         </main>
 
         {/* Landing Page Footer */}
-        <footer className="w-full py-10 px-6 border-t border-white/[0.06] bg-[#050508]/80 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
+        <footer className="w-full py-10 px-6 border-t border-white/[0.08] bg-[#030304]/90 backdrop-blur-md relative z-10 text-center flex flex-col items-center justify-center gap-5">
           {/* Connect with me social links */}
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm font-semibold text-slate-100">
             <span className="text-xs font-bold text-slate-400 tracking-wider uppercase leading-none self-center">Connect with me:</span>
@@ -2868,7 +3538,7 @@ export default function Home() {
               href="https://github.com/fakekhanabdullah"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.16] text-xs text-slate-300 hover:text-white transition-all duration-200"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:bg-blue-500/10 hover:border-blue-500/30 text-xs text-slate-300 hover:text-white transition-all duration-200"
             >
               <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
               <span>GitHub</span>
@@ -2877,10 +3547,21 @@ export default function Home() {
               href="https://www.linkedin.com/in/khan-abdullahh"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.07] hover:border-white/[0.16] text-xs text-slate-300 hover:text-white transition-all duration-200"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:bg-blue-500/10 hover:border-blue-500/30 text-xs text-slate-300 hover:text-white transition-all duration-200"
             >
               <svg className="h-4 w-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
               <span>LinkedIn</span>
+            </a>
+          </div>
+
+          {/* Legal Links for Google OAuth & Compliance */}
+          <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
+            <a href="/privacy" className="hover:text-blue-300 underline transition">
+              Privacy Policy
+            </a>
+            <span>•</span>
+            <a href="/terms" className="hover:text-blue-300 underline transition">
+              Terms of Service
             </a>
           </div>
 
@@ -2889,365 +3570,336 @@ export default function Home() {
             <p>© 2026 Flow136. Made by: Khan Abdullah</p>
           </div>
 
-          <p className="text-[10px] text-slate-400 max-w-md leading-relaxed">
+          <p className="text-[10px] text-slate-500 max-w-md leading-relaxed">
             Disclaimer: Not officially affiliated with BRAC University. All curriculum guidelines and course codes reflect official CSE program requirements.
           </p>
         </footer>
-        {renderTutorial()}
+
+        {/* Floating Cloud Toast Notification */}
+        {cloudToastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-200 pointer-events-none">
+            <div className="bg-[#0b0c14]/95 border border-blue-500/30 text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl flex items-center gap-2.5">
+              <Cloud className="h-4 w-4 text-blue-400 shrink-0 animate-pulse" />
+              <span>{cloudToastMessage}</span>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
 
   return (
-    <div className="min-h-screen w-full bg-[#030304] bg-gradient-to-b from-[#030304] via-[#050508] to-[#07070b] text-slate-100 font-sans antialiased flex flex-col">
-      <header className="border-b border-white/[0.08] bg-[#050508]/90 backdrop-blur-xl sticky top-0 z-40 px-4 sm:px-6 py-3.5 shadow-2xl shadow-black/40 w-full relative">
-        {/* Desktop Header Layout (Screens >= 1024px) */}
-        <div className="hidden lg:flex w-full max-w-7xl mx-auto items-center justify-between relative min-h-[50px]">
-          {/* Left: Logo */}
+    <div className="min-h-screen w-full bg-[#030306] bg-gradient-to-b from-[#030306] via-[#05060b] to-[#070810] text-slate-100 font-sans antialiased flex flex-col lg:flex-row relative selection:bg-indigo-500/30 selection:text-white">
+      {/* 1. Left Vertical Dock (Desktop >= 1024px) */}
+      <aside className="hidden lg:flex w-20 h-screen sticky top-0 bg-[#060814]/95 border-r border-white/[0.08] flex-col items-center justify-between py-6 shrink-0 z-40 backdrop-blur-xl shadow-xl">
+        {/* Top: Logo & Nav Jump Icons */}
+        <div className="flex flex-col items-center gap-6 w-full">
+          {/* Logo */}
           <div 
             onClick={() => setShowDashboard(false)}
-            className="flex items-center gap-3 cursor-pointer select-none hover:opacity-90 active:scale-95 transition-all relative z-20 shrink-0"
-            title="Back to Landing Page"
+            className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-indigo-500 border border-indigo-400/30 flex items-center justify-center shadow-[0_8px_20px_rgba(99,102,241,0.35)] cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+            title="Flow136 - Back to Landing Page"
           >
-            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 border border-blue-400/30 flex items-center justify-center shadow-[0_8px_22px_rgba(37,99,235,0.32)] shrink-0">
-              <svg className="h-5.5 w-5.5 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-              </svg>
-            </div>
-            <h1 className="text-xl font-black tracking-tight text-white">
-              Flow136
-            </h1>
+            <svg className="h-6 w-6 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+            </svg>
           </div>
 
-          {/* Center: Mode Toggler (Dead Center) */}
-          <div 
-            className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 bg-[#08080d] border border-white/[0.08] p-1.5 rounded-2xl flex shadow-inner gap-1.5 ${getHighlightClass('mode-toggler')}`}
-            data-tutorial="mode-toggler"
-          >
-            <button
-              type="button"
-              onClick={() => mode !== 'tracker' && handleModeToggle()}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                mode === 'tracker' 
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
-              }`}
-            >
-              Course Tracker Only
-            </button>
+          <div className="w-8 h-px bg-white/[0.08]" />
+
+          {/* Navigation Jump Icons */}
+          <nav className="flex flex-col items-center gap-3 w-full">
+            {/* Planner Icon */}
             <button
               type="button"
               onClick={() => {
-                if (mode !== 'gpa') {
-                  handleModeToggle();
-                  if (tutorialStep === 7) {
-                    handleTutorialStepChange(8);
-                  }
-                }
+                const el = document.getElementById("semester-planner-section");
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                mode === 'gpa' 
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/[0.04]'
+              className="h-10 w-10 rounded-2xl bg-white/[0.03] hover:bg-blue-500/15 border border-white/[0.08] hover:border-blue-500/40 text-slate-300 hover:text-blue-400 flex items-center justify-center transition-all cursor-pointer group"
+              title="Semester Planner"
+            >
+              <Calendar className="h-4.5 w-4.5 group-hover:scale-110 transition-transform" />
+            </button>
+
+            {/* CGPA Mode / Graph Icon */}
+            <button
+              type="button"
+              onClick={() => {
+                if (mode !== 'gpa') handleModeToggle();
+                const el = document.getElementById("gpa-dashboard-section");
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`h-10 w-10 rounded-2xl border flex items-center justify-center transition-all cursor-pointer group ${
+                mode === 'gpa'
+                  ? 'bg-blue-500/20 border-blue-500 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.25)]'
+                  : 'bg-white/[0.03] hover:bg-blue-500/15 border-white/[0.08] hover:border-blue-500/40 text-slate-300 hover:text-blue-400'
               }`}
+              title="CGPA & Growth Points"
             >
-              Course + CGPA Planner
+              <TrendingUp className="h-4.5 w-4.5 group-hover:scale-110 transition-transform" />
             </button>
-          </div>
 
-          {/* Right Action Group: Feeling Lost, Hamburger dropdown, Reset */}
-          <div className="flex items-center gap-3 relative z-20">
-            {/* 1. Feeling lost? */}
+            {/* Categories / Curriculum Icon */}
             <button
               type="button"
-              onClick={() => setShowRoadmapModal(true)}
-              className={`inline-flex items-center gap-2 bg-[#0c0c12] hover:bg-[#121218] border border-white/[0.08] hover:border-indigo-500/40 text-indigo-300 hover:text-white text-xs font-bold px-4 py-2.5 rounded-2xl transition-all cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
-              title="View recommended CSE/CS curriculum roadmap"
-              data-tutorial="feeling-lost-btn"
+              onClick={() => {
+                const el = document.getElementById("category-requirements-section");
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="h-10 w-10 rounded-2xl bg-white/[0.03] hover:bg-blue-500/15 border border-white/[0.08] hover:border-blue-500/40 text-slate-300 hover:text-blue-400 flex items-center justify-center transition-all cursor-pointer group"
+              title="Category Requirements"
             >
-              <HelpCircle className="h-4 w-4 text-indigo-400" />
-              <span>Feeling lost?</span>
+              <Layers className="h-4.5 w-4.5 group-hover:scale-110 transition-transform" />
             </button>
 
-            {/* 2. Hamburger Dropdown Menu */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDataDropdown(!showDataDropdown);
-                  setShowHeaderMenu(false);
-                }}
-                className={`h-10 w-10 rounded-2xl border flex items-center justify-center transition-all text-xs font-semibold cursor-pointer ${
-                  showDataDropdown 
-                    ? 'bg-blue-600/15 border-blue-500 text-blue-400 shadow-lg shadow-blue-500/20' 
-                    : 'bg-[#0c0c12] hover:bg-[#121218] border-white/[0.08] text-slate-300 hover:text-white hover:border-white/[0.16]'
-                } ${getHighlightClass('hamburger-menu')}`}
-                title="Menu"
-                data-tutorial="hamburger-menu"
-              >
-                <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                </svg>
-              </button>
-
-              {showDataDropdown && (
-                <div className="absolute right-0 mt-2 w-56 bg-[#09090e] border border-white/[0.1] rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportBackup();
-                      setShowDataDropdown(false);
-                    }}
-                    className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
-                  >
-                    <Download className="h-4 w-4 text-blue-400" />
-                    <span>Backup Data</span>
-                  </button>
-                  <label className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 cursor-pointer transition font-medium">
-                    <Upload className="h-4 w-4 text-indigo-400" />
-                    <span>Restore Data</span>
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={(e) => {
-                        handleImportBackup(e);
-                        setShowDataDropdown(false);
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowGradeSheetModal(true);
-                      setShowDataDropdown(false);
-                    }}
-                    className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
-                  >
-                    <Camera className="h-4 w-4 text-purple-400" />
-                    <span>Snapshot Progress</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTutorialStep(5);
-                      setShowDashboard(true);
-                      setShowDataDropdown(false);
-                    }}
-                    className="w-full px-3 py-2.5 hover:bg-white/[0.05] text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
-                  >
-                    <HelpCircle className="h-4 w-4 text-amber-400" />
-                    <span>Restart Tour</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 3. Reset Button */}
+            {/* Extra Tools / Drawer Toggle Button */}
             <button
               type="button"
-              onClick={() => setShowResetConfirm(true)}
-              title="Reset tracker to onboarding defaults"
-              className="h-10 w-10 rounded-2xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 hover:border-rose-700/50 text-rose-400 flex items-center justify-center transition cursor-pointer shadow-sm"
+              onClick={() => setIsExtraSidebarOpen(prev => !prev)}
+              className={`h-10 w-10 rounded-2xl border flex items-center justify-center transition-all cursor-pointer relative group ${
+                isExtraSidebarOpen
+                  ? 'bg-blue-500/25 border-blue-400 text-blue-200 shadow-[0_0_16px_rgba(59,130,246,0.3)]'
+                  : 'bg-white/[0.03] hover:bg-blue-500/15 border-white/[0.08] hover:border-blue-500/40 text-slate-300 hover:text-blue-300'
+              }`}
+              title="Extra Tools & Utilities (Backups, Roadmap, Grading Scale, Reset)"
             >
-              <RotateCcw className="h-4 w-4" />
+              <Menu className="h-4.5 w-4.5 group-hover:scale-110 transition-transform" />
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-400" />
             </button>
-          </div>
+          </nav>
         </div>
 
-        {/* Mobile Header Layout (Screens < 1024px - Vertically Stacked & Center-Aligned) */}
-        <div className="flex lg:hidden flex-col items-center text-center gap-3.5 w-full">
-          {/* 1. Logo and Catchphrase */}
-          <div 
-            onClick={() => setShowDashboard(false)}
-            className="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-85 active:scale-95 transition-all"
-            title="Back to Landing Page"
+        {/* Bottom: Cloud Sync / Profile at the very bottom */}
+        <div className="flex flex-col items-center gap-3 w-full mt-auto">
+          {/* Cloud Sync / Profile Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setGatekeeperError(null);
+              setShowCloudModal(true);
+            }}
+            className="h-10 w-10 rounded-2xl bg-white/[0.03] hover:bg-blue-500/15 border border-white/[0.08] hover:border-blue-500/40 flex items-center justify-center transition-all cursor-pointer relative group"
+            title={cloudUser ? `Google Drive Synced • ${cloudUser.email}` : "Sign in with G-Suite"}
           >
-            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 border border-blue-400/30 flex items-center justify-center shadow-[0_6px_18px_rgba(37,99,235,0.3)] shrink-0">
-              <svg className="h-5 w-5 text-white fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
-              </svg>
+            {cloudUser?.picture ? (
+              <img src={cloudUser.picture} alt="Profile" className="h-6 w-6 rounded-full object-cover" />
+            ) : (
+              <Cloud className={`h-4.5 w-4.5 ${cloudUser ? 'text-blue-400' : 'text-slate-400 group-hover:text-blue-400'}`} />
+            )}
+            {cloudUser && (
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-400" />
+            )}
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. Slide-out Drawer: Where Extra Things Go (Backups, Snapshot, Roadmap, Reset) */}
+      {isExtraSidebarOpen && (
+        <>
+          {/* Backdrop on small screens */}
+          <div 
+            onClick={() => setIsExtraSidebarOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          />
+
+          <div className="fixed top-0 left-0 lg:left-20 h-screen w-80 sm:w-96 bg-[#070913]/98 border-r border-blue-500/20 backdrop-blur-2xl z-50 p-6 flex flex-col justify-between shadow-2xl animate-in slide-in-from-left duration-200 overflow-y-auto custom-scrollbar">
+            <div className="space-y-6">
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                    <Menu className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-white">Extra Tools &amp; Data</h3>
+                    <p className="text-[11px] text-slate-400">Backups, snapshots &amp; utilities</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsExtraSidebarOpen(false)}
+                  className="h-8 w-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Backup & Progress Actions */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 block mb-1">Data &amp; Backups</span>
+                
+                {/* Export JSON */}
+                <button
+                  type="button"
+                  onClick={handleExportBackup}
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] hover:bg-blue-500/10 border border-white/[0.08] hover:border-blue-500/30 flex items-center gap-3 transition cursor-pointer text-left group"
+                >
+                  <div className="h-8 w-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <Download className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-100 group-hover:text-blue-300 transition-colors">Export JSON Backup</p>
+                    <p className="text-[10px] text-slate-400">Save curriculum to local file</p>
+                  </div>
+                </button>
+
+                {/* Restore JSON */}
+                <label className="w-full p-3 rounded-2xl bg-white/[0.03] hover:bg-blue-500/10 border border-white/[0.08] hover:border-blue-500/30 flex items-center gap-3 transition cursor-pointer text-left group">
+                  <div className="h-8 w-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                    <Upload className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-100 group-hover:text-blue-300 transition-colors">Restore JSON Backup</p>
+                    <p className="text-[10px] text-slate-400">Load from .json file</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => {
+                      handleImportBackup(e);
+                      setIsExtraSidebarOpen(false);
+                    }}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* Snapshot Progress */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGradeSheetModal(true);
+                    setIsExtraSidebarOpen(false);
+                  }}
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] hover:bg-blue-500/10 border border-white/[0.08] hover:border-blue-500/30 flex items-center gap-3 transition cursor-pointer text-left group"
+                >
+                  <div className="h-8 w-8 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                    <Camera className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-100 group-hover:text-blue-300 transition-colors">Snapshot Progress PNG</p>
+                    <p className="text-[10px] text-slate-400">Generate high-res grade sheet</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Curriculum Tools */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 block mb-1">Academic Utilities</span>
+
+                {/* Feeling Lost Roadmap */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRoadmapModal(true);
+                    setIsExtraSidebarOpen(false);
+                  }}
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] hover:bg-blue-500/10 border border-white/[0.08] hover:border-blue-500/30 flex items-center gap-3 transition cursor-pointer text-left group"
+                >
+                  <div className="h-8 w-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <HelpCircle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-100 group-hover:text-blue-300 transition-colors">Feeling Lost? Roadmap</p>
+                    <p className="text-[10px] text-slate-400">Official CSE curriculum guide</p>
+                  </div>
+                </button>
+
+                {/* Sample OBE Curriculum (Version 2023) Link */}
+                <a
+                  href="https://docs.google.com/document/d/1_gvpl646PurM3Cl_JoxaXt0mvQx_6-Qc"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] hover:bg-indigo-500/10 border border-white/[0.08] hover:border-indigo-500/30 flex items-center justify-between gap-3 transition cursor-pointer text-left group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-8 w-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-100 group-hover:text-indigo-300 transition-colors truncate">Sample OBE Curriculum (Version 2023)</p>
+                      <p className="text-[10px] text-slate-400 truncate">Official Google Doc syllabus</p>
+                    </div>
+                  </div>
+                  <ExternalLink className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-300 transition-colors shrink-0" />
+                </a>
+
+                {/* Grading System Scale */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGradingSystemModal(true);
+                    setIsExtraSidebarOpen(false);
+                  }}
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] hover:bg-blue-500/10 border border-white/[0.08] hover:border-blue-500/30 flex items-center gap-3 transition cursor-pointer text-left group"
+                >
+                  <div className="h-8 w-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Award className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-100 group-hover:text-blue-300 transition-colors">BRACU Grading Scale</p>
+                    <p className="text-[10px] text-slate-400">View grade points &amp; marks table</p>
+                  </div>
+                </button>
+              </div>
             </div>
-            <h1 className="text-xl font-black tracking-tight text-white">
-              Flow136
-            </h1>
-          </div>
 
-          {/* 2. Mode Toggler */}
-          <div 
-            className={`bg-[#08080d] border border-white/[0.08] p-1.5 rounded-2xl flex w-full max-w-[340px] justify-between gap-1 shadow-inner ${getHighlightClass('mode-toggler')}`}
-            data-tutorial="mode-toggler"
-          >
-            <button
-              type="button"
-              onClick={() => mode !== 'tracker' && handleModeToggle()}
-              className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-all text-center cursor-pointer ${
-                mode === 'tracker' 
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
-                  : 'text-slate-400 hover:text-slate-100'
-              }`}
-            >
-              Course Tracker Only
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (mode !== 'gpa') {
-                  handleModeToggle();
-                  if (tutorialStep === 7) {
-                    handleTutorialStepChange(8);
-                  }
-                }
-              }}
-              className={`flex-1 py-2 rounded-xl text-[11px] font-bold transition-all text-center cursor-pointer ${
-                mode === 'gpa' 
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 border border-blue-400/20' 
-                  : 'text-slate-400 hover:text-slate-100'
-              }`}
-            >
-              Course + CGPA Planner
-            </button>
-          </div>
-
-          {/* 3. Actions Row: Help, Reset, Hamburger */}
-          <div className="w-full max-w-[260px] flex gap-2.5 justify-center">
-            {/* Help/Roadmap Button */}
-            <button
-              type="button"
-              onClick={() => setShowRoadmapModal(true)}
-              className={`h-10 w-10 bg-[#0c0c12] hover:bg-[#121218] border border-white/[0.08] text-indigo-300 hover:text-white flex items-center justify-center rounded-2xl transition cursor-pointer shadow-sm ${getHighlightClass('feeling-lost-btn')}`}
-              title="View recommended CSE/CS curriculum roadmap"
-              data-tutorial="feeling-lost-btn"
-            >
-              <HelpCircle className="h-4.5 w-4.5 text-indigo-400" />
-            </button>
-
-            {/* Reset Button */}
-            <button
-              type="button"
-              onClick={() => setShowResetConfirm(true)}
-              title="Reset tracker to onboarding defaults"
-              className="h-10 w-10 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 text-rose-400 flex items-center justify-center rounded-2xl transition cursor-pointer shadow-sm"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-
-            {/* Mobile Hamburger Menu Toggle */}
-            <div className="relative">
+            {/* Drawer Bottom: Reset Plan */}
+            <div className="pt-4 border-t border-white/[0.08]">
               <button
                 type="button"
                 onClick={() => {
-                  setShowHeaderMenu(!showHeaderMenu);
-                  setShowDataDropdown(false);
+                  setShowResetConfirm(true);
+                  setIsExtraSidebarOpen(false);
                 }}
-                className={`h-10 w-10 rounded-2xl border flex items-center justify-center transition-all cursor-pointer ${
-                  showHeaderMenu 
-                    ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-md shadow-blue-500/20' 
-                    : 'bg-[#0c0c12] hover:bg-[#121218] border-white/[0.08] text-slate-300 hover:text-white'
-                } ${getHighlightClass('hamburger-menu')}`}
-                title="Menu"
-                data-tutorial="hamburger-menu"
+                className="w-full p-3 rounded-2xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 hover:border-rose-700/50 text-rose-400 flex items-center gap-3 transition cursor-pointer"
               >
-                <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                </svg>
-              </button>
-
-              {/* Mobile Menu Dropdown */}
-              {showHeaderMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-[#09090e] border border-white/[0.1] rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleExportBackup();
-                      setShowHeaderMenu(false);
-                    }}
-                    className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
-                  >
-                    <Download className="h-4 w-4 text-blue-400" />
-                    <span>Backup Data</span>
-                  </button>
-                  <label className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 cursor-pointer transition font-medium">
-                    <Upload className="h-4 w-4 text-indigo-400" />
-                    <span>Restore Data</span>
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={(e) => {
-                        handleImportBackup(e);
-                        setShowHeaderMenu(false);
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowGradeSheetModal(true);
-                      setShowHeaderMenu(false);
-                    }}
-                    className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
-                  >
-                    <Camera className="h-4 w-4 text-purple-400" />
-                    <span>Snapshot Progress</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTutorialStep(5);
-                      setShowDashboard(true);
-                      setShowHeaderMenu(false);
-                    }}
-                    className="w-full px-3 py-2.5 hover:bg-slate-900/70 text-left text-xs text-slate-200 hover:text-white rounded-xl flex items-center gap-2.5 transition cursor-pointer font-medium"
-                  >
-                    <HelpCircle className="h-4 w-4 text-amber-400" />
-                    <span>Restart Tour</span>
-                  </button>
+                <RotateCcw className="h-4 w-4 shrink-0" />
+                <div className="text-left">
+                  <p className="text-xs font-bold">Reset Plan to Default</p>
                 </div>
-              )}
+              </button>
             </div>
           </div>
+        </>
+      )}
+
+      {/* 3. Mobile Header (< 1024px) */}
+      <header className="flex lg:hidden items-center justify-between px-4 py-3 bg-[#060814]/90 border-b border-white/[0.08] sticky top-0 z-40 backdrop-blur-xl">
+        <div 
+          onClick={() => setShowDashboard(false)}
+          className="flex items-center gap-2.5 cursor-pointer"
+        >
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-indigo-500 border border-indigo-400/30 flex items-center justify-center text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
+            <svg className="h-4.5 w-4.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+            </svg>
+          </div>
+          <span className="font-black text-sm tracking-tight text-white">Flow136</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Profile / Cloud Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setGatekeeperError(null);
+              setShowCloudModal(true);
+            }}
+            className="h-9 w-9 rounded-xl bg-white/[0.04] border border-white/[0.1] flex items-center justify-center cursor-pointer hover:bg-white/[0.08] transition"
+          >
+            {cloudUser?.picture ? (
+              <img src={cloudUser.picture} alt="" className="h-5 w-5 rounded-full object-cover" />
+            ) : (
+              <Cloud className="h-4 w-4 text-blue-400" />
+            )}
+          </button>
         </div>
       </header>
 
-      {/* 2. Top-level Alert Panels (Standing warnings) */}
-      {mode === 'gpa' && (
-        <div className="w-full max-w-7xl mx-auto px-4 lg:px-6 pt-4 flex flex-col gap-3">
-          {cumulativeStats.cgpa > 0 && cumulativeStats.cgpa < 1.50 && (
-            <div className="flex items-center gap-3 bg-red-950/20 border border-red-900/50 p-4 rounded-xl text-red-400">
-              <AlertTriangle className="h-5 w-5 shrink-0" />
-              <p className="text-sm font-medium">
-                <span className="font-bold">Academic Probation:</span> Your CGPA is below 1.50. You must raise it to 1.50+ next semester to avoid dismissal.
-              </p>
-            </div>
-          )}
-          {firstSemesterGpa !== null && firstSemesterGpa < 1.00 && (
-            <div className="flex items-center gap-3 bg-amber-950/20 border border-amber-900/50 p-4 rounded-xl text-amber-400">
-              <AlertTriangle className="h-5 w-5 shrink-0" />
-              <p className="text-sm font-medium">
-                <span className="font-bold">High Risk:</span> 1st Semester CGPA below 1.00. Immediate academic counseling required.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {backupFileError && (
-        <div className="w-full max-w-7xl mx-auto px-4 lg:px-6 mt-4">
-          <div className="flex items-center justify-between gap-3 bg-rose-950/30 border border-rose-900/40 p-4 rounded-xl text-rose-400">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5" />
-              <p className="text-sm">{backupFileError}</p>
-            </div>
-            <button onClick={() => setBackupFileError(null)}>
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Main Dashboard Layout */}      {!isOnboarded ? (
+      {/* 4. Main Body Container (either Onboarding Wizard or Bento Dashboard) */}
+      {!isOnboarded ? (
         /* Onboarding Wizard Modal overlay if not onboarded */
         <div className="flex-1 flex items-center justify-center p-4 md:p-6 bg-[#030304] bg-gradient-to-b from-[#030304] via-[#08080d] to-[#030304]">
           <div className="w-full max-w-xl mx-auto bg-[#08080d]/95 border border-slate-700/80 rounded-3xl shadow-2xl relative overflow-hidden p-6 sm:p-8 space-y-6">
@@ -3314,8 +3966,7 @@ export default function Home() {
                         onboardingData.pathway === 'foundation'
                           ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-[0_0_20px_rgba(99,102,241,0.2)]'
                           : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                      } ${getHighlightClass('pathway-card-a')}`}
-                      data-tutorial="pathway-card-a"
+                      }`}
                     >
                       <div className="h-8 w-8 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
                         <BookOpen className="h-4.5 w-4.5" />
@@ -3337,8 +3988,7 @@ export default function Home() {
                         onboardingData.pathway === 'credit'
                           ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-[0_0_20px_rgba(99,102,241,0.2)]'
                           : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                      } ${getHighlightClass('pathway-card-b')}`}
-                      data-tutorial="pathway-card-b"
+                      }`}
                     >
                       <div className="h-8 w-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
                         <Award className="h-4.5 w-4.5" />
@@ -3493,12 +4143,7 @@ export default function Home() {
 
                 <div className="flex justify-end pt-2">
                   <button
-                    onClick={() => {
-                      setWizardStep(2);
-                      if (tutorialStep === 2) {
-                        handleTutorialStepChange(3);
-                      }
-                    }}
+                    onClick={() => setWizardStep(2)}
                     disabled={!onboardingData.pathway}
                     className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98]"
                   >
@@ -3512,9 +4157,9 @@ export default function Home() {
             {wizardStep === 2 && (
               <div className="space-y-6 relative z-10">
                 <div>
-                  <h2 className="text-xl font-black tracking-tight text-white">RS & English Placement Engine</h2>
+                  <h2 className="text-xl font-black tracking-tight text-white">Intake &amp; RS Relation Information</h2>
                   <p className="text-slate-400 text-xs mt-1.5 leading-relaxed">
-                    Set up your Residential Semester. The engine will evaluate prerequisites to auto-populate the RS card.
+                    Set up your starting intake and Residential Semester (RS) details to automatically organize your curriculum pathway.
                   </p>
                 </div>
 
@@ -3522,7 +4167,7 @@ export default function Home() {
                   {/* Select RS Term */}
                   <div className="space-y-2">
                     <label className="block text-xs font-bold tracking-wider text-slate-400">When will you attend RS?</label>
-                    <div className="grid grid-cols-3 gap-2.5" data-tutorial="rs-term-select">
+                    <div className="grid grid-cols-3 gap-2.5">
                       {(["3rd Semester", "4th Semester", "5th Semester"] as const).map(term => (
                         <button
                           key={term}
@@ -3531,7 +4176,7 @@ export default function Home() {
                             onboardingData.rsTerm === term
                               ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
                               : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                          } ${getHighlightClass('rs-term-select')}`}
+                          }`}
                         >
                           {term}
                         </button>
@@ -3547,8 +4192,7 @@ export default function Home() {
                         <select
                           value={onboardingData.startingTerm}
                           onChange={(e) => setOnboardingData({ ...onboardingData, startingTerm: e.target.value as any })}
-                          className={`w-full appearance-none bg-[#0e0e14] border border-slate-800/80 text-xs pl-3.5 pr-9 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold ${getHighlightClass('starting-intake-select')}`}
-                          data-tutorial="starting-intake-select"
+                          className="w-full appearance-none bg-[#0e0e14] border border-slate-800/80 text-xs pl-3.5 pr-9 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold"
                         >
                           <option value="Spring">Spring</option>
                           <option value="Summer">Summer</option>
@@ -3563,7 +4207,7 @@ export default function Home() {
                         <select
                           value={onboardingData.startingYear}
                           onChange={(e) => setOnboardingData({ ...onboardingData, startingYear: parseInt(e.target.value) })}
-                          className={`w-full appearance-none bg-[#0e0e14] border border-slate-800/80 text-xs pl-3.5 pr-9 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold ${getHighlightClass('starting-intake-select')}`}
+                          className="w-full appearance-none bg-[#0e0e14] border border-slate-800/80 text-xs pl-3.5 pr-9 py-2.5 rounded-2xl text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold"
                         >
                           {Array.from({ length: 11 }, (_, i) => 2020 + i).map(year => (
                             <option key={year} value={year}>{year}</option>
@@ -3576,12 +4220,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Select English Prior Status */}
+                  {/* Select Stream 1 Status Prior to RS */}
                   <div className="space-y-2 pt-2">
                     <label className="block text-xs font-bold tracking-wider text-slate-400">
-                      English status prior to RS:
+                      Stream 1 Status Prior to RS:
                     </label>
-                    <div className="space-y-2.5" data-tutorial="english-status-select">
+                    <div className="space-y-2.5">
                       
                       {onboardingData.creditOption === 'opt2' ? (
                         <>
@@ -3591,7 +4235,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseA'
                                 ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
                                 : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                            } ${getHighlightClass('english-status-select')}`}
+                            }`}
                           >
                             <div>
                               <p className="text-white font-bold text-xs">Have not completed ENG102 before RS (will take ENG102 during RS)</p>
@@ -3606,7 +4250,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseD'
                                 ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
                                 : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                            } ${getHighlightClass('english-status-select')}`}
+                            }`}
                           >
                             <div>
                               <p className="text-white font-bold text-xs">Completed ENG102 before RS</p>
@@ -3623,7 +4267,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseA'
                                 ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
                                 : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                            } ${getHighlightClass('english-status-select')}`}
+                            }`}
                           >
                             <div>
                               <p className="text-white font-bold text-xs">Passed ENG101, but NOT ENG102 before RS</p>
@@ -3638,7 +4282,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseB'
                                 ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
                                 : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                            } ${getHighlightClass('english-status-select')}`}
+                            }`}
                           >
                             <div>
                               <p className="text-white font-bold text-xs">Passed ENG101 and ENG102 before RS</p>
@@ -3653,7 +4297,7 @@ export default function Home() {
                               onboardingData.engStatusPriorToRS === 'caseC'
                                 ? 'bg-gradient-to-br from-indigo-900/30 to-blue-900/20 border-indigo-500 text-indigo-300 font-bold shadow-md shadow-indigo-500/15'
                                 : 'bg-[#0e0e14]/60 border-slate-800/80 text-slate-400 hover:border-slate-700 hover:text-slate-100 hover:bg-[#121218]/70'
-                            } ${getHighlightClass('english-status-select')}`}
+                            }`}
                           >
                             <div>
                               <p className="text-white font-bold text-xs">Failed ENG101 before RS</p>
@@ -3678,9 +4322,6 @@ export default function Home() {
                     onClick={() => {
                       if (onboardingData.engStatusPriorToRS) {
                         setWizardStep(3);
-                        if (tutorialStep === 3) {
-                          handleTutorialStepChange(4);
-                        }
                       }
                     }}
                     disabled={!onboardingData.engStatusPriorToRS}
@@ -3749,39 +4390,164 @@ export default function Home() {
                   <button
                     onClick={() => {
                       generateInitialPlan();
-                      if (tutorialStep === 4) {
-                        handleTutorialStepChange(5);
-                      }
                     }}
-                    className={`px-7 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold rounded-2xl shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98] ${getHighlightClass('generate-plan-btn')}`}
-                    data-tutorial="generate-plan-btn"
+                    className="px-7 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold rounded-2xl shadow-lg shadow-indigo-500/25 transition duration-200 cursor-pointer text-xs uppercase tracking-wider active:scale-[0.98]"
                   >
                     Generate Plan
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Dynamic spacer on mobile when tutorial is active, so the user can scroll past the floating tutorial popover */}
-            {tutorialStep !== null && (
-              <div className="h-60 md:hidden" />
-            )}
           </div>
         </div>
       ) : (
-        /* Actual App Dashboard */
-        <div className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 flex flex-col min-w-0">
-          <div className="flex-1 flex flex-col lg:flex-row gap-6 min-w-0 w-full">
+        /* Actual App Dashboard in Bento Grid Layout */
+        <main className="flex-1 min-w-0 p-3 sm:p-5 lg:p-6 overflow-y-auto max-h-screen custom-scrollbar flex flex-col gap-6 pb-24 lg:pb-6">
+          <div className="w-full bg-[#070913]/90 border border-blue-500/20 rounded-[24px] sm:rounded-[36px] p-4 sm:p-6 lg:p-7 shadow-2xl backdrop-blur-xl relative flex flex-col gap-6">
             
-            {/* A. LEFT SIDEBAR: Degree Progress & Statistics */}
-            <aside className="w-full lg:w-[38%] shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-32px)] flex flex-col gap-6 lg:overflow-y-auto pr-4 custom-scrollbar">
-              
-              {/* 1. Degree Standing Card */}
-              <div className="bg-[#08080d]/90 border border-slate-800/80 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0">
-                <div className="absolute top-0 right-0 h-32 w-32 bg-blue-500/[0.03] rounded-full blur-2xl pointer-events-none" />
-                
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xs font-bold text-blue-400 tracking-wider uppercase flex items-center gap-2">
+            {/* Bento Container Top Bar: Mode Toggle, Search, Degree Status & Profile */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
+              {/* Mode Toggler Pill */}
+              <div className="bg-[#04050d] border border-blue-500/20 p-1.5 rounded-2xl flex items-center gap-1.5 self-start md:self-auto shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => mode !== 'tracker' && handleModeToggle()}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    mode === 'tracker'
+                      ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Course Tracker</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mode !== 'gpa' && handleModeToggle()}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    mode === 'gpa'
+                      ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  <span>Course + CGPA</span>
+                </button>
+              </div>
+
+              {/* Global Search Bar (Center) */}
+              <div className="relative flex-1 max-w-md mx-auto w-full">
+                <div className="relative flex items-center bg-[#04050d] border border-blue-500/20 rounded-2xl px-3.5 py-2 shadow-inner focus-within:border-blue-400/50 transition-colors">
+                  <Search className="h-4 w-4 text-blue-400/80 mr-2.5 shrink-0" />
+                  <input
+                    type="text"
+                    value={globalSearchQuery}
+                    onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                    placeholder="Search course code or name (e.g. CSE220, MAT120)..."
+                    className="w-full bg-transparent text-xs text-slate-100 placeholder-slate-500 focus:outline-none font-medium"
+                  />
+                  {globalSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setGlobalSearchQuery('')}
+                      className="text-slate-500 hover:text-slate-300 p-0.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Dropdown Results */}
+                {isSearchFocused && globalFilteredCourses.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-2 bg-[#070913] border border-blue-500/30 rounded-2xl p-2 shadow-2xl z-50 divide-y divide-white/[0.04] max-h-72 overflow-y-auto custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
+                    {globalFilteredCourses.map(course => (
+                      <div
+                        key={course.code}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setAddCoursesPreselected([course.code]);
+                          setIsAddCoursesModalOpen(true);
+                          setGlobalSearchQuery('');
+                          setIsSearchFocused(false);
+                        }}
+                        onClick={() => {
+                          setAddCoursesPreselected([course.code]);
+                          setIsAddCoursesModalOpen(true);
+                          setGlobalSearchQuery('');
+                          setIsSearchFocused(false);
+                        }}
+                        className="p-2.5 hover:bg-blue-500/10 rounded-xl flex items-center justify-between cursor-pointer transition group"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-xs text-white group-hover:text-blue-300 font-mono">{course.code}</span>
+                            <span className="text-[10px] text-slate-400 bg-white/[0.04] px-1.5 py-0.2 rounded">{course.credits} Cr</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">{course.title}</p>
+                        </div>
+                        <span className="text-[10px] text-blue-400 font-semibold shrink-0 group-hover:underline">
+                          Add to Plan &rarr;
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Degree Status Badge & Profile */}
+              <div className="hidden md:flex items-center gap-3 shrink-0">
+                <div className="bg-[#04050d] border border-blue-500/20 px-3 py-1.5 rounded-2xl flex items-center gap-2">
+                  <BadgeCheck className="h-4 w-4 text-blue-400" />
+                  <span className="text-xs font-extrabold text-slate-200">136 Cr Degree</span>
+                  <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/15 px-2 py-0.5 rounded-lg border border-blue-500/20">
+                    {cumulativeStats.completedCredits} Cr
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Alerts */}
+            {mode === 'gpa' && (
+              <div className="w-full flex flex-col gap-2.5">
+                {cumulativeStats.cgpa > 0 && cumulativeStats.cgpa < 1.50 && (
+                  <div className="flex items-center gap-3 bg-red-950/20 border border-red-900/50 p-3.5 rounded-2xl text-red-400">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <p className="text-xs font-medium">
+                      <span className="font-bold">Academic Probation:</span> Your CGPA is below 1.50. You must raise it to 1.50+ next semester to avoid dismissal.
+                    </p>
+                  </div>
+                )}
+                {firstSemesterGpa !== null && firstSemesterGpa < 1.00 && (
+                  <div className="flex items-center gap-3 bg-amber-950/20 border border-amber-900/50 p-3.5 rounded-2xl text-amber-400">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <p className="text-xs font-medium">
+                      <span className="font-bold">High Risk:</span> 1st Semester CGPA below 1.00. Immediate academic counseling required.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {backupFileError && (
+              <div className="w-full flex items-center justify-between gap-3 bg-rose-950/30 border border-rose-900/40 p-3.5 rounded-2xl text-rose-400">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-4 w-4" />
+                  <p className="text-xs">{backupFileError}</p>
+                </div>
+                <button onClick={() => setBackupFileError(null)}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Top Row: 3 Modules Horizontally Adjacent (Degree Standing, Category Requirements, GenEd Streams) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 items-stretch">
+              {/* 1. Degree Standing & Circular Speedometer Gauge */}
+              <div id="degree-standing-section" className="bg-[#070913]/90 border border-blue-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-xs font-extrabold text-blue-400 tracking-wider uppercase flex items-center gap-2">
                     <BadgeCheck className="h-4 w-4" />
                     Degree Standing
                   </h2>
@@ -3789,42 +4555,342 @@ export default function Home() {
                     {Math.round((cumulativeStats.completedCredits / 136) * 100)}%
                   </span>
                 </div>
-                
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between items-baseline text-xs mb-2">
-                      <span className="text-slate-400 font-medium">Completed Credits</span>
-                      <span className="text-slate-100 font-extrabold text-sm">{cumulativeStats.completedCredits} <span className="text-slate-400 font-normal text-xs">/ 136 Cr</span></span>
-                    </div>
-                    <div className="h-3 w-full bg-[#040406] border border-slate-800/80 rounded-full overflow-hidden p-0.5 shadow-inner">
-                      <div 
-                        style={{ width: `${Math.min(100, (cumulativeStats.completedCredits / 136) * 100)}%` }}
-                        className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-indigo-400 rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]"
+
+                {/* Circular Speedometer Gauge SVG */}
+                <div className="flex flex-col items-center justify-center py-2 relative">
+                  <div className="relative w-40 h-40 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                      {/* Background Track Circle */}
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="48"
+                        className="stroke-[#04050d]"
+                        strokeWidth="10"
+                        fill="transparent"
                       />
+                      {/* Animated Glowing Progress Circle */}
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="48"
+                        stroke="url(#degreeGaugeGradientTop)"
+                        strokeWidth="10"
+                        strokeDasharray={2 * Math.PI * 48}
+                        strokeDashoffset={2 * Math.PI * 48 * (1 - Math.min(1, cumulativeStats.completedCredits / 136))}
+                        strokeLinecap="round"
+                        fill="transparent"
+                        className="transition-all duration-1000 ease-out"
+                      />
+                      <defs>
+                        <linearGradient id="degreeGaugeGradientTop" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#3b82f6" />
+                          <stop offset="50%" stopColor="#6366f1" />
+                          <stop offset="100%" stopColor="#8b5cf6" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    {/* Center Readout */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                      <span className="text-3xl font-black text-white font-mono tracking-tight">
+                        {cumulativeStats.completedCredits}
+                      </span>
+                      <span className="text-[11px] font-bold text-blue-400 font-mono tracking-wider">
+                        / 136 Cr
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-0.5 font-semibold">
+                        {Math.round((cumulativeStats.completedCredits / 136) * 100)}% Complete
+                      </span>
                     </div>
                   </div>
                 </div>
+
+                {/* Status Footer */}
+                <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+                    <Target className="h-3.5 w-3.5 text-blue-400" />
+                    <span>Degree Status</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                    {Math.max(0, 136 - cumulativeStats.completedCredits)} Credits to Graduate
+                  </span>
+                </div>
               </div>
 
-                {/* 2. Middle Section: Cumulative CGPA display, Probation Badge, and the Target CGPA Solver widget */}
-                {mode === 'gpa' && (
-                  <div className="bg-[#08080d]/90 border border-slate-800/80 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-6">
-                    <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
-                      <Gauge className="h-4 w-4" />
-                      GPA Dashboard
-                    </h2>
+              {/* 2. Category Requirements (Program Core, School Core, Major Electives) */}
+              <div id="category-requirements-section" className="bg-[#070913]/90 border border-blue-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-extrabold text-blue-400 tracking-wider uppercase flex items-center gap-2">
+                    <Layers className="h-4 w-4" />
+                    Category Requirements
+                  </h2>
+                  <span className="text-[10px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full">
+                    136 Cr
+                  </span>
+                </div>
+
+                <div className="space-y-3 flex-1 flex flex-col justify-center">
+                  {/* Program Core */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('core')}
+                    className="w-full text-left cursor-pointer bg-blue-950/20 border border-blue-500/20 hover:border-blue-500/40 transition rounded-xl p-3 flex flex-col gap-1.5 group"
+                  >
+                    <div className="w-full flex justify-between items-center text-xs">
+                      <span className="text-blue-200 font-semibold group-hover:text-blue-100">Program Core</span>
+                      <span className="text-blue-300 font-extrabold text-[11px] font-mono">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
+                    </div>
+                    <div className="h-2 w-full bg-[#04050d] border border-blue-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${(curriculumProgress.coreCompleted / curriculumProgress.coreTotal) * 100}%` }}
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* School Core */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('schoolCore')}
+                    className="w-full text-left cursor-pointer bg-cyan-950/20 border border-cyan-500/20 hover:border-cyan-500/40 transition rounded-xl p-3 flex flex-col gap-1.5 group"
+                  >
+                    <div className="w-full flex justify-between items-center text-xs">
+                      <span className="text-cyan-200 font-semibold group-hover:text-cyan-100">School Core (Math/Sci)</span>
+                      <span className="text-cyan-300 font-extrabold text-[11px] font-mono">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
+                    </div>
+                    <div className="h-2 w-full bg-[#04050d] border border-cyan-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${(curriculumProgress.schoolCoreCompleted / curriculumProgress.schoolCoreTotal) * 100}%` }}
+                        className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* CSE Major Electives */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('electives')}
+                    className="w-full text-left cursor-pointer bg-amber-950/20 border border-amber-500/20 hover:border-amber-500/40 transition rounded-xl p-3 flex flex-col gap-1.5 group"
+                  >
+                    <div className="w-full flex justify-between items-center text-xs">
+                      <span className="text-amber-200 font-semibold group-hover:text-amber-100">Major Electives</span>
+                      <span className="text-amber-300 font-extrabold text-[11px] font-mono">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
+                    </div>
+                    <div className="h-2 w-full bg-[#04050d] border border-amber-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${(curriculumProgress.electiveCompleted / curriculumProgress.electiveTotal) * 100}%` }}
+                        className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+                </div>
+
+                {/* Category Requirements Footer */}
+                <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between text-xs text-slate-400">
+                  <span>Completed: <strong className="text-blue-300 font-mono">{curriculumProgress.coreCompleted + curriculumProgress.schoolCoreCompleted + curriculumProgress.electiveCompleted}</strong> Cr</span>
+                  <span className="text-[11px] text-slate-400">Click card to inspect</span>
+                </div>
+              </div>
+
+              {/* 3. GenEd Streams (S1-S5 & Free Choice) */}
+              <div id="gened-streams-section" className="bg-[#070913]/90 border border-blue-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-extrabold text-blue-400 tracking-wider uppercase flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    GenEd Streams
+                  </h2>
+                  <span className="text-[10px] font-mono font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full">
+                    39 Cr
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 flex-1 items-center">
+                  {/* S1: Writing Comprehension */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('stream1')}
+                    className="p-3 rounded-xl bg-rose-950/20 border border-rose-500/25 hover:border-rose-500/50 text-left transition cursor-pointer flex flex-col justify-between gap-1.5 group"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-rose-200 font-semibold truncate group-hover:text-rose-100" title="S1: Writing Comprehension">S1: Writing Comprehension</span>
+                      <span className="text-rose-300 font-mono font-bold text-[11px]">{curriculumProgress.stream1Completed}/{curriculumProgress.stream1Total}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-[#04050d] border border-rose-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (curriculumProgress.stream1Completed / curriculumProgress.stream1Total) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* S2: Math & Natural Sciences */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('stream2')}
+                    className="p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/25 hover:border-indigo-500/50 text-left transition cursor-pointer flex flex-col justify-between gap-1.5 group"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-indigo-200 font-semibold truncate group-hover:text-indigo-100" title="S2: Math & Natural Sciences">S2: Math &amp; Natural Sciences</span>
+                      <span className="text-indigo-300 font-mono font-bold text-[11px]">{curriculumProgress.stream2Completed}/{curriculumProgress.stream2Total}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-[#04050d] border border-indigo-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (curriculumProgress.stream2Completed / curriculumProgress.stream2Total) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* S3: Arts & Humanities */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('stream3')}
+                    className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/25 hover:border-emerald-500/50 text-left transition cursor-pointer flex flex-col justify-between gap-1.5 group"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-emerald-200 font-semibold truncate group-hover:text-emerald-100" title="S3: Arts & Humanities">S3: Arts &amp; Humanities</span>
+                      <span className="text-emerald-300 font-mono font-bold text-[11px]">{curriculumProgress.stream3Completed}/{curriculumProgress.stream3Total}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-[#04050d] border border-emerald-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (curriculumProgress.stream3Completed / curriculumProgress.stream3Total) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* S4: Social Sciences */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('stream4')}
+                    className="p-3 rounded-xl bg-violet-950/20 border border-violet-500/25 hover:border-violet-500/50 text-left transition cursor-pointer flex flex-col justify-between gap-1.5 group"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-violet-200 font-semibold truncate group-hover:text-violet-100" title="S4: Social Sciences">S4: Social Sciences</span>
+                      <span className="text-violet-300 font-mono font-bold text-[11px]">{curriculumProgress.stream4Completed}/{curriculumProgress.stream4Total}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-[#04050d] border border-violet-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (curriculumProgress.stream4Completed / curriculumProgress.stream4Total) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* S5: Communities (CST) */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('stream5')}
+                    className="p-3 rounded-xl bg-teal-950/20 border border-teal-500/25 hover:border-teal-500/50 text-left transition cursor-pointer flex flex-col justify-between gap-1.5 group"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-teal-200 font-semibold truncate group-hover:text-teal-100" title="S5: Communities (CST)">S5: Communities (CST)</span>
+                      <span className="text-teal-300 font-mono font-bold text-[11px]">{curriculumProgress.stream5Completed}/{curriculumProgress.stream5Total}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-[#04050d] border border-teal-500/20 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (curriculumProgress.stream5Completed / curriculumProgress.stream5Total) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+
+                  {/* Free GenEd Elective */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySelectorKey('freeGenEd')}
+                    className="p-3 rounded-xl bg-slate-900/40 border border-slate-700/50 hover:border-slate-500 text-left transition cursor-pointer flex flex-col justify-between gap-1.5 group"
+                  >
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-300 font-semibold truncate group-hover:text-white" title="Free GenEd Elective">Free GenEd Elective</span>
+                      <span className="text-slate-200 font-mono font-bold text-[11px]">{curriculumProgress.freeGenEdCredits}/{curriculumProgress.freeGenEdTotal}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-[#04050d] border border-slate-700/40 rounded-full overflow-hidden p-0.5">
+                      <div 
+                        style={{ width: `${Math.min(100, (curriculumProgress.freeGenEdCredits / curriculumProgress.freeGenEdTotal) * 100)}%` }}
+                        className="h-full bg-gradient-to-r from-slate-400 to-slate-200 rounded-full transition-all duration-300"
+                      />
+                    </div>
+                  </button>
+                </div>
+
+                {/* GenEd Footer */}
+                <div className="pt-3 border-t border-white/[0.08] flex items-center justify-between text-xs text-slate-400">
+                  <span>Completed: <strong className="text-blue-300 font-mono">{curriculumProgress.stream1Completed + curriculumProgress.stream2Completed + curriculumProgress.stream3Completed + curriculumProgress.stream4Completed + curriculumProgress.stream5Completed + curriculumProgress.freeGenEdCredits}</strong> / 39 Cr</span>
+                  <span className="text-[11px] text-slate-400">GenEd distribution</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Performance & Analytics Row (Visual CGPA Graph + GPA Dashboard) */}
+            {mode === 'gpa' ? (
+              <div id="gpa-dashboard-section" className="grid grid-cols-1 xl:grid-cols-12 gap-5 sm:gap-6 items-stretch">
+                {/* Visual CGPA Graph */}
+                <div className="xl:col-span-7 flex flex-col">
+                  <CgpaSemesterGraph
+                    semesters={semesters}
+                    semesterStats={semesterStats}
+                    cumulativeStats={{
+                      completedCredits: cumulativeStats.completedCredits,
+                      cgpa: cumulativeStats.cgpa,
+                      standing: cumulativeStats.cgpa >= 2.0 ? "Good Standing" : "Probation Range"
+                    }}
+                    targetCgpa={targetCgpa}
+                    onOpenQuickGrades={() => {
+                      setQuickGradesInitialSemIdx(0);
+                      setIsQuickGradesModalOpen(true);
+                    }}
+                    onSelectSemester={(semId) => {
+                      const idx = semesters.findIndex(s => s.id === semId);
+                      if (idx !== -1) {
+                        setQuickGradesInitialSemIdx(idx);
+                        setIsQuickGradesModalOpen(true);
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* GPA Dashboard & Target Solver Card */}
+                <div className="xl:col-span-5 flex flex-col">
+                  <div className="bg-[#070913]/90 border border-blue-500/25 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl relative overflow-hidden transition-all duration-300 hover:border-blue-500/40 space-y-4 flex flex-col justify-between h-full">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-[0_0_18px_rgba(99,102,241,0.35)] shrink-0">
+                          <Gauge className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-sm font-black text-white tracking-tight flex items-center gap-2">
+                            GPA Dashboard &amp; Growth
+                          </h2>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Cumulative tracking &amp; target solver
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickGradesInitialSemIdx(0);
+                          setIsQuickGradesModalOpen(true);
+                        }}
+                        className="h-10 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/25 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Zap className="h-3.5 w-3.5 fill-current text-white" />
+                        <span>Quick Grades</span>
+                      </button>
+                    </div>
 
                     {/* Cumulative CGPA Box */}
-                    <div className="bg-[#0e0e14]/70 border border-slate-800/80 p-5 rounded-2xl flex items-center justify-between shadow-inner">
+                    <div className="bg-[#05060f]/90 border border-blue-500/20 p-4 rounded-2xl flex items-center justify-between shadow-inner">
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Cumulative CGPA</p>
-                        <p className="text-3xl lg:text-4xl font-black text-white mt-1 tracking-tight">
+                        <p className="text-[10px] text-blue-300 uppercase tracking-wider font-bold">Cumulative CGPA</p>
+                        <p className="text-3xl font-black text-white mt-1 tracking-tight font-mono">
                           {cumulativeStats.cgpa.toFixed(2)}
                         </p>
                       </div>
                       <div className="pt-0.5">
                         {cumulativeStats.cgpa >= 2.0 ? (
-                          <span className="inline-flex items-center justify-center whitespace-nowrap text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                          <span className="inline-flex items-center justify-center whitespace-nowrap text-xs font-bold bg-blue-500/15 border border-blue-500/30 text-blue-300 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-[0_0_12px_rgba(59,130,246,0.15)]">
                             Good Standing
                           </span>
                         ) : (
@@ -3836,27 +4902,24 @@ export default function Home() {
                     </div>
 
                     {/* Target CGPA Solver Widget */}
-                    <div 
-                      className={`bg-[#0e0e14]/60 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg space-y-4 transition-all ${getHighlightClass('gpa-solver-card')}`}
-                      data-tutorial="gpa-solver-card"
-                    >
+                    <div className="bg-[#05060f]/80 border border-blue-500/20 rounded-2xl p-4 shadow-lg space-y-3">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-2xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
-                            <Crosshair className="h-5 w-5" />
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="h-8 w-8 rounded-xl border border-blue-400/30 bg-blue-500/10 flex items-center justify-center text-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.18)] shrink-0">
+                            <Crosshair className="h-4 w-4" />
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold tracking-wider text-slate-100 uppercase truncate">
                               TARGET SOLVER
                             </p>
-                            <p className="text-[11px] text-slate-400 truncate">
+                            <p className="text-[10px] text-slate-400 truncate">
                               CGPA Goal Calculator
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 bg-[#050508] border border-slate-800 focus-within:border-indigo-500/50 rounded-xl px-3 py-1.5 shadow-inner transition-colors shrink-0">
-                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Goal:</span>
+                        <div className="flex items-center gap-1.5 bg-[#030409] border border-blue-500/30 focus-within:border-blue-400/70 rounded-xl px-2.5 py-1 shadow-inner transition-colors shrink-0">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Goal:</span>
                           <input
                             type="number"
                             step="0.01"
@@ -3864,410 +4927,265 @@ export default function Home() {
                             max="4.0"
                             value={targetCgpa}
                             onChange={(e) => setTargetCgpa(e.target.value)}
-                            className="w-12 text-sm font-bold font-mono text-indigo-300 bg-transparent focus:outline-none text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none selection:bg-indigo-500/30"
+                            className="w-12 text-sm font-bold font-mono text-amber-300 bg-transparent focus:outline-none text-center appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none selection:bg-blue-500/30"
                           />
                         </div>
                       </div>
 
                       {targetSolverResult.isAchieved ? (
-                        <div className="flex items-center gap-3 bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-3.5 text-emerald-300">
-                          <div className="h-9 w-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                        <div className="flex items-center gap-2.5 bg-blue-950/25 border border-blue-800/40 rounded-xl p-3 text-blue-200">
+                          <div className="h-7 w-7 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-blue-400" />
                           </div>
                           <div className="min-w-0 text-xs">
-                            <p className="font-bold text-emerald-200 uppercase tracking-wider text-[11px]">Goal Achieved!</p>
-                            <p className="text-emerald-300/80 text-[11px] mt-0.5">
-                              Graduation requirements fulfilled. Final CGPA: <span className="font-bold font-mono text-emerald-200">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>
+                            <p className="font-bold text-blue-200 uppercase tracking-wider text-[10px]">Goal Achieved!</p>
+                            <p className="text-blue-300/80 text-[10px] mt-0.5">
+                              Final CGPA: <span className="font-bold font-mono text-blue-200">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>
                             </p>
                           </div>
                         </div>
                       ) : targetSolverResult.requiredGpa > 4.00 ? (
-                        <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3.5 space-y-2 text-rose-300">
+                        <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3 space-y-1.5 text-rose-300">
                           <div className="flex items-center gap-2 text-rose-400 font-bold text-xs tracking-wider uppercase">
-                            <AlertTriangle className="h-4 w-4 shrink-0" />
-                            <span>Target Out of Reach</span>
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            <span className="text-[11px]">Target Out of Reach</span>
                           </div>
-                          <p className="text-[11px] text-rose-300/80 leading-relaxed">
-                            Even scoring a flat <strong className="text-rose-200 font-bold">4.00 (all A's)</strong> across your remaining credits yields a maximum possible graduation CGPA of <span className="font-mono font-bold text-rose-200 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
+                          <p className="text-[10px] text-rose-300/80 leading-relaxed">
+                            Even scoring flat <strong className="text-rose-200 font-bold">4.00 (all A&apos;s)</strong> yields a maximum possible CGPA of <span className="font-mono font-bold text-rose-200 bg-rose-500/10 px-1 py-0.5 rounded border border-rose-500/20">{targetSolverResult.maxPossibleCgpa.toFixed(2)}</span>.
                           </p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-2.5">
-                            {/* Required GPA Stat Card */}
-                            <div className="bg-[#050508]/80 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
-                              <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+                        <div className="space-y-2.5">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-[#030409]/90 border border-blue-500/20 rounded-xl p-2.5 flex flex-col justify-between">
+                              <span className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase">
                                 Required GPA / Sem
                               </span>
-                              <div className="flex items-baseline gap-2 mt-1.5">
-                                <span className="text-xl font-bold font-mono text-white tracking-tight">
+                              <div className="flex items-baseline gap-1.5 mt-1">
+                                <span className="text-lg font-bold font-mono text-white tracking-tight">
                                   {Math.max(0, targetSolverResult.requiredGpa).toFixed(2)}
                                 </span>
-                                <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 rounded-lg">
+                                <span className="text-[10px] font-bold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.2 rounded font-mono">
                                   {targetSolverResult.letterEquivalent}
                                 </span>
                               </div>
                             </div>
 
-                            {/* Remaining Credits Stat Card */}
-                            <div className="bg-[#050508]/80 border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
-                              <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+                            <div className="bg-[#030409]/90 border border-blue-500/20 rounded-xl p-2.5 flex flex-col justify-between">
+                              <span className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase">
                                 Remaining Credits
                               </span>
-                              <div className="flex items-baseline gap-1 mt-1.5">
-                                <span className="text-xl font-bold font-mono text-slate-100 tracking-tight">
+                              <div className="flex items-baseline gap-1 mt-1">
+                                <span className="text-lg font-bold font-mono text-slate-100 tracking-tight">
                                   {targetSolverResult.remainingCredits}
                                 </span>
-                                <span className="text-[11px] font-medium text-slate-400">
+                                <span className="text-[10px] font-medium text-slate-400">
                                   cr
                                 </span>
                               </div>
                             </div>
                           </div>
 
-                          {/* Summary Row */}
-                          <div className="flex items-center gap-2.5 bg-[#050508]/60 border border-slate-800/60 rounded-xl px-3 py-2 text-[11px] text-slate-300 leading-relaxed">
-                            <ArrowUpRight className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                          <div className="flex items-center gap-2 bg-[#030409]/70 border border-blue-500/20 rounded-xl px-2.5 py-1.5 text-[10px] text-slate-300 leading-relaxed">
+                            <ArrowUpRight className="h-3 w-3 text-blue-400 shrink-0" />
                             <span>
-                              Maintain an average of <strong className="text-indigo-300 font-semibold">{Math.max(0, targetSolverResult.requiredGpa).toFixed(2)} ({targetSolverResult.letterEquivalent})</strong> over remaining credits to reach your <strong className="text-white font-semibold">{targetCgpa}</strong> goal.
+                              Maintain <strong className="text-blue-300 font-semibold">{Math.max(0, targetSolverResult.requiredGpa).toFixed(2)} ({targetSolverResult.letterEquivalent})</strong> for goal <strong className="text-white font-semibold">{targetCgpa}</strong>.
                             </span>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Repeat ROI Analyzer Sidebar Widget */}
-                    <div 
-                      className={`bg-[#0e0e14]/60 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg transition-all ${getHighlightClass('roi-analyzer')}`}
-                      data-tutorial="roi-analyzer"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-10 w-10 rounded-2xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.18)] shrink-0">
-                            <Repeat className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold tracking-wider text-slate-100 uppercase truncate">
-                              REPEAT ROI ANALYZER
-                            </p>
-                            <p className="text-[11px] text-slate-400 truncate">
-                              Simulate grade improvement impact
-                            </p>
-                          </div>
+                    {/* Repeat ROI Analyzer Trigger */}
+                    <div className="bg-[#05060f]/80 border border-blue-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-7 w-7 rounded-xl border border-indigo-400/30 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
+                          <Repeat className="h-3.5 w-3.5" />
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowRoiModal(true)}
-                          className="px-3.5 py-2 bg-[#121218] hover:bg-[#161622] border border-slate-700/80 hover:border-indigo-500/50 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] shrink-0 cursor-pointer"
-                        >
-                          <span>{roiAnalysis.candidates.length} courses</span>
-                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                        </button>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-100 uppercase truncate">
+                            REPEAT ROI
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            Simulate grade boosts
+                          </p>
+                        </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowRoiModal(true)}
+                        className="px-3 py-1.5 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 rounded-xl text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <span>{roiAnalysis.candidates.length} courses</span>
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Tracker Only Mode Growth Card */
+              <div className="bg-[#070913]/90 border border-blue-500/25 rounded-3xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-extrabold text-blue-400 tracking-wider uppercase">CGPA Planner Mode</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Switch to Course + CGPA Planner to enable live SGPA/CGPA calculations, target solver goal tracking, and repeat grade analyzers.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleModeToggle()}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/25 transition cursor-pointer shrink-0 active:scale-95"
+                >
+                  Enable CGPA Mode
+                </button>
+              </div>
+            )}
+
+            {/* Full-Width Semester Planner Section */}
+            <div id="semester-planner-section" className="w-full space-y-5">
+
+                {/* Semester Timelines Header */}
+                <div className="grid grid-cols-3 items-center border-b border-white/[0.08] pb-3">
+                  {/* Left Column: Title */}
+                  <div className="flex justify-start">
+                    <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">
+                      <span>Semester Planner</span>
+                    </h2>
+                  </div>
+
+                  {/* Center Column: View Switcher Toggle */}
+                  <div className="flex justify-center items-center">
+                    <div className="flex items-center bg-[#04050d] border border-blue-500/20 rounded-2xl p-1 shadow-inner">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleViewMode("list")}
+                        title="List Feed"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          currentLayout === "list"
+                            ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30"
+                            : "text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <List className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">List</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleViewMode("kanban")}
+                        title="Kanban Board"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          currentLayout === "kanban"
+                            ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30"
+                            : "text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <Columns className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Board</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Actions */}
+                  <div className="flex justify-end items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleTriggerAddSemester}
+                      className="h-9 px-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-500 hover:from-blue-500 hover:via-indigo-500 hover:to-indigo-400 text-white font-bold text-xs rounded-2xl shadow-md shadow-indigo-600/25 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                      title="Add Semester"
+                    >
+                      <Plus className="h-4 w-4 stroke-[2.5]" />
+                      <span className="hidden sm:inline">Add Semester</span>
+                      <span className="sm:hidden">Add</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSemesterSort()}
+                      className="bg-[#04050d] hover:bg-[#090b18] border border-blue-500/25 hover:border-blue-400/40 text-blue-300 hover:text-white p-2 rounded-2xl transition-colors flex items-center justify-center h-9 w-9 shrink-0 cursor-pointer shadow-sm active:scale-95 group"
+                      title={semesterSortOrder === 'asc' ? "Sorted: First → Last (Click for Last → First)" : "Sorted: Last → First (Click for First → Last)"}
+                    >
+                      <svg
+                        className="h-4.5 w-4.5 fill-none stroke-current"
+                        viewBox="0 0 24 24"
+                        strokeWidth="2.3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="3" y1="5.5" x2="14" y2="5.5" />
+                        <line x1="3" y1="11" x2="10.5" y2="11" />
+                        <line x1="3" y1="16.5" x2="7" y2="16.5" />
+                        <g
+                          className="transition-transform duration-300 ease-out origin-[18.5px_11px]"
+                          style={{
+                            transform: semesterSortOrder === 'desc' ? 'rotate(180deg)' : 'rotate(0deg)',
+                          }}
+                        >
+                          <line x1="18.5" y1="4.5" x2="18.5" y2="17.5" />
+                          <polyline points="14.5 13.5 18.5 17.5 22.5 13.5" />
+                        </g>
+                      </svg>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleAllCollapse}
+                      className="bg-[#04050d] hover:bg-[#090b18] border border-blue-500/25 hover:border-blue-400/40 text-blue-300 hover:text-white p-2 rounded-2xl transition-colors flex items-center justify-center h-9 w-9 shrink-0 cursor-pointer shadow-sm active:scale-95"
+                      title={isAnyExpanded ? "Collapse All" : "Expand All"}
+                    >
+                      {isAnyExpanded ? (
+                        <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="3" y1="6" x2="13" y2="6" />
+                          <line x1="3" y1="12" x2="13" y2="12" />
+                          <line x1="3" y1="18" x2="13" y2="18" />
+                          <path d="M18 4V10M18 10L15 7M18 10L21 7" />
+                          <path d="M18 20V14M18 14L15 17M18 14L21 17" />
+                        </svg>
+                      ) : (
+                        <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="3" y1="6" x2="13" y2="6" />
+                          <line x1="3" y1="12" x2="13" y2="12" />
+                          <line x1="3" y1="18" x2="13" y2="18" />
+                          <path d="M18 10V4M18 4L15 7M18 4L21 7" />
+                          <path d="M18 14V20M18 20L15 17M18 20L21 17" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Top Horizontal Scrollbar for Kanban Board */}
+                {currentLayout === 'kanban' && (
+                  <div 
+                    ref={topScrollBarRef} 
+                    onScroll={handleTopScroll}
+                    className="overflow-x-auto custom-scrollbar h-2.5 mb-2 w-full shrink-0"
+                  >
+                    <div style={{ width: `${kanbanScrollWidth}px`, height: '1px' }} />
                   </div>
                 )}
 
-                {/* 3. Bottom Section: Category Requirements */}
-                <div className="bg-[#08080d]/90 border border-slate-800/80 rounded-3xl p-6 shadow-xl relative overflow-hidden backdrop-blur-md shrink-0 space-y-5">
-                  <h2 className="text-xs font-bold text-indigo-400 tracking-wider uppercase flex items-center gap-2">
-                    <Layers className="h-4 w-4" />
-                    Category Requirements
-                  </h2>
-
-                  <div className="space-y-3.5">
-                    {/* 1. Mandatory Core - Blue Accent Card */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('core')}
-                      className={`w-full text-left cursor-pointer bg-blue-950/15 border border-blue-500/20 hover:bg-blue-950/25 hover:border-blue-500/40 transition-all rounded-2xl p-4 flex flex-col gap-2.5 focus:outline-none group shadow-sm ${getHighlightClass('category-core')}`}
-                      data-tutorial="category-core"
-                    >
-                      <div className="w-full flex justify-between items-center text-xs">
-                        <span className="text-blue-200 font-semibold group-hover:text-blue-100 transition-colors">Program Core (Mandatory)</span>
-                        <span className="text-blue-300 font-extrabold text-[11px] bg-blue-500/15 border border-blue-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.coreCompleted} / {curriculumProgress.coreTotal} Cr</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-[#040406] border border-blue-500/20 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.coreCompleted / curriculumProgress.coreTotal) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                        />
-                      </div>
-                    </button>
-
-                    {/* Capstone Thesis - Purple Accent Card */}
-                    <div
-                      className={`w-full bg-purple-950/15 border border-purple-500/20 hover:border-purple-500/40 rounded-2xl p-4 flex flex-col gap-2.5 transition-all shadow-sm ${getHighlightClass('category-thesis')}`}
-                    >
-                      <div className="w-full flex justify-between items-center text-xs">
-                        <span className="text-purple-200 font-semibold">Capstone Thesis (CSE400)</span>
-                        <span className="text-purple-300 font-extrabold text-[11px] bg-purple-500/15 border border-purple-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.thesisCompleted} / {curriculumProgress.thesisTotal} Cr</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-[#040406] border border-purple-500/20 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.thesisCompleted / curriculumProgress.thesisTotal) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(168,85,247,0.5)]"
-                        />
-                      </div>
-                    </div>
-
-                    {/* 2. School Core (Math & Sciences) - Cyan Accent Card */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('schoolCore')}
-                      className={`w-full text-left cursor-pointer bg-cyan-950/15 border border-cyan-500/20 hover:bg-cyan-950/25 hover:border-cyan-500/40 transition-all rounded-2xl p-4 flex flex-col gap-2.5 focus:outline-none group shadow-sm ${getHighlightClass('category-school')}`}
-                      data-tutorial="category-school"
-                    >
-                      <div className="w-full flex justify-between items-center text-xs">
-                        <span className="text-cyan-200 font-semibold group-hover:text-cyan-100 transition-colors">School Core (Math &amp; Sciences)</span>
-                        <span className="text-cyan-300 font-extrabold text-[11px] bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.schoolCoreCompleted} / {curriculumProgress.schoolCoreTotal} Cr</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-[#040406] border border-cyan-500/20 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.schoolCoreCompleted / curriculumProgress.schoolCoreTotal) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(6,182,212,0.5)]"
-                        />
-                      </div>
-                    </button>
-
-                    {/* 3. CSE Major Electives - Amber Accent Card */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('electives')}
-                      className={`w-full text-left cursor-pointer bg-amber-950/15 border border-amber-500/20 hover:bg-amber-950/25 hover:border-amber-500/40 transition-all rounded-2xl p-4 flex flex-col gap-2.5 focus:outline-none group shadow-sm ${getHighlightClass('category-electives')}`}
-                      data-tutorial="category-electives"
-                    >
-                      <div className="w-full flex justify-between items-center text-xs">
-                        <span className="text-amber-200 font-semibold group-hover:text-amber-100 transition-colors">CSE Major Electives</span>
-                        <span className="text-amber-300 font-extrabold text-[11px] bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 rounded-full">{curriculumProgress.electiveCompleted} / {curriculumProgress.electiveTotal} Cr</span>
-                      </div>
-                      <div className="h-2.5 w-full bg-[#040406] border border-amber-500/20 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.electiveCompleted / curriculumProgress.electiveTotal) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
-                        />
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* 4. GenEd Streams */}
-                  <div className="pt-4 border-t border-slate-800/80 space-y-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">GenEd Streams Progress (39 Cr Total)</p>
-                    
-                    {/* Stream 1: Writing */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('stream1')}
-                      className={`w-full text-left cursor-pointer bg-rose-950/10 border border-rose-500/15 hover:bg-rose-950/20 hover:border-rose-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
-                      data-tutorial="category-gened"
-                    >
-                      <div className="w-full flex justify-between items-center text-[11px]">
-                        <span className="text-rose-200/90 group-hover:text-rose-100 font-medium">GenEd Stream 1 (Writing Comprehension)</span>
-                        <span className="text-rose-300 font-extrabold text-[10px] bg-rose-500/15 border border-rose-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream1Completed} / {curriculumProgress.stream1Total} Cr</span>
-                      </div>
-                      <div className="h-2 w-full bg-[#040406] border border-rose-500/15 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.stream1Completed / curriculumProgress.stream1Total) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full transition-all duration-300"
-                        />
-                      </div>
-                    </button>
-
-                    {/* Stream 2: Math/Sci */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('stream2')}
-                      className={`w-full text-left cursor-pointer bg-indigo-950/10 border border-indigo-500/15 hover:bg-indigo-950/20 hover:border-indigo-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
-                      data-tutorial="category-gened"
-                    >
-                      <div className="w-full flex justify-between items-center text-[11px]">
-                        <span className="text-indigo-200/90 group-hover:text-indigo-100 font-medium">GenEd Stream 2 (Math &amp; Natural Sciences)</span>
-                        <span className="text-indigo-300 font-extrabold text-[10px] bg-indigo-500/15 border border-indigo-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream2Completed} / {curriculumProgress.stream2Total} Cr</span>
-                      </div>
-                      <div className="h-2 w-full bg-[#040406] border border-indigo-500/15 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.stream2Completed / curriculumProgress.stream2Total) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-300"
-                        />
-                      </div>
-                    </button>
-
-                    {/* Stream 3: Arts */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('stream3')}
-                      className={`w-full text-left cursor-pointer bg-emerald-950/10 border border-emerald-500/15 hover:bg-emerald-950/20 hover:border-emerald-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
-                      data-tutorial="category-gened"
-                    >
-                      <div className="w-full flex justify-between items-center text-[11px]">
-                        <span className="text-emerald-200/90 group-hover:text-emerald-100 font-medium">GenEd Stream 3 (Arts &amp; Humanities)</span>
-                        <span className="text-emerald-300 font-extrabold text-[10px] bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream3Completed} / {curriculumProgress.stream3Total} Cr</span>
-                      </div>
-                      <div className="h-2 w-full bg-[#040406] border border-emerald-500/15 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.stream3Completed / curriculumProgress.stream3Total) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300"
-                        />
-                      </div>
-                    </button>
-
-                    {/* Stream 4: Social */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('stream4')}
-                      className={`w-full text-left cursor-pointer bg-violet-950/10 border border-violet-500/15 hover:bg-violet-950/20 hover:border-violet-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
-                      data-tutorial="category-gened"
-                    >
-                      <div className="w-full flex justify-between items-center text-[11px]">
-                        <span className="text-violet-200/90 group-hover:text-violet-100 font-medium">GenEd Stream 4 (Social Sciences)</span>
-                        <span className="text-violet-300 font-extrabold text-[10px] bg-violet-500/15 border border-violet-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream4Completed} / {curriculumProgress.stream4Total} Cr</span>
-                      </div>
-                      <div className="h-2 w-full bg-[#040406] border border-violet-500/15 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.stream4Completed / curriculumProgress.stream4Total) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full transition-all duration-300"
-                        />
-                      </div>
-                    </button>
-
-                    {/* Stream 5: CST */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('stream5')}
-                      className={`w-full text-left cursor-pointer bg-teal-950/10 border border-teal-500/15 hover:bg-teal-950/20 hover:border-teal-500/35 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
-                      data-tutorial="category-gened"
-                    >
-                      <div className="w-full flex justify-between items-center text-[11px]">
-                        <span className="text-teal-200/90 group-hover:text-teal-100 font-medium">GenEd Stream 5 (Communities / CST)</span>
-                        <span className="text-teal-300 font-extrabold text-[10px] bg-teal-500/15 border border-teal-500/25 px-2 py-0.5 rounded-full">{curriculumProgress.stream5Completed} / {curriculumProgress.stream5Total} Cr</span>
-                      </div>
-                      <div className="h-2 w-full bg-[#040406] border border-teal-500/15 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.stream5Completed / curriculumProgress.stream5Total) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full transition-all duration-300"
-                        />
-                      </div>
-                    </button>
-
-                    {/* Free GenEd Choice */}
-                    <button
-                      type="button"
-                      onClick={() => setActiveCategorySelectorKey('freeGenEd')}
-                      className={`w-full text-left cursor-pointer bg-slate-900/30 border border-slate-800 hover:bg-slate-900/50 hover:border-slate-700 transition-all rounded-xl p-3 flex flex-col gap-2 focus:outline-none group ${getHighlightClass('category-gened')}`}
-                      data-tutorial="category-gened"
-                    >
-                      <div className="w-full flex justify-between items-center text-[11px]">
-                        <span className="text-slate-300 group-hover:text-white font-medium">GenEd Electives (Free Choice)</span>
-                        <span className="text-slate-300 font-extrabold text-[10px] bg-slate-800/80 border border-slate-700 px-2 py-0.5 rounded-full">{curriculumProgress.freeGenEdCredits} / {curriculumProgress.freeGenEdTotal} Cr</span>
-                      </div>
-                      <div className="h-2 w-full bg-[#040406] border border-slate-800 rounded-full overflow-hidden p-0.5">
-                        <div 
-                          style={{ width: `${(curriculumProgress.freeGenEdCredits / curriculumProgress.freeGenEdTotal) * 100}%` }}
-                          className="h-full bg-gradient-to-r from-slate-500 to-indigo-500 rounded-full transition-all duration-300"
-                        />
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              </aside>
-
-          {/* B. RIGHT PANEL: Semester Timeline Card Schedule */}
-          <main className="flex-1 w-full min-w-0 max-w-full lg:overflow-y-auto pr-0 lg:pr-4 custom-scrollbar space-y-6 pb-20">
-            
-            {/* Semester timelines header */}
-            <div className="grid grid-cols-3 items-center border-b border-slate-800/80 pb-3">
-              {/* Left Column: Title */}
-              <div className="flex justify-start">
-                <h2 className="text-base font-black tracking-tight text-white flex items-center gap-2">
-                  <span>Semester Planner</span>
-                </h2>
-              </div>
-
-              {/* Center Column: View Switcher Toggle */}
-              <div className="flex justify-center">
-                <div 
-                  className={`flex items-center bg-[#050508] border border-slate-800/90 rounded-2xl p-1 shadow-inner ${getHighlightClass('layout-toggles')}`}
-                  data-tutorial="layout-toggles"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleToggleViewMode("list")}
-                    title="List Feed"
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      currentLayout === "list"
-                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <List className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">List</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleViewMode("kanban")}
-                    title="Kanban Board"
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      currentLayout === "kanban"
-                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <Columns className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Board</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Column: Actions */}
-              <div className="flex justify-end items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleAllCollapse}
-                  className="bg-[#08080d] border border-slate-800/80 hover:border-slate-700/80 text-slate-300 hover:text-white p-2 rounded-2xl transition flex items-center justify-center h-9 w-9 shrink-0 cursor-pointer shadow-sm"
-                  title={isAnyExpanded ? "Collapse All" : "Expand All"}
-                >
-                  {isAnyExpanded ? (
-                    <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="3" y1="6" x2="13" y2="6" />
-                      <line x1="3" y1="12" x2="13" y2="12" />
-                      <line x1="3" y1="18" x2="13" y2="18" />
-                      <path d="M18 4V10M18 10L15 7M18 10L21 7" />
-                      <path d="M18 20V14M18 14L15 17M18 14L21 17" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="3" y1="6" x2="13" y2="6" />
-                      <line x1="3" y1="12" x2="13" y2="12" />
-                      <line x1="3" y1="18" x2="13" y2="18" />
-                      <path d="M18 10V4M18 4L15 7M18 4L21 7" />
-                      <path d="M18 14V20M18 20L15 17M18 20L21 17" />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddSemester}
-                  className="flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl shadow-lg shadow-blue-600/25 transition whitespace-nowrap h-9 w-9 shrink-0 cursor-pointer"
-                  title="Add New Semester"
-                >
-                  <Plus className="h-4.5 w-4.5 shrink-0 stroke-[2.2]" />
-                </button>
-              </div>
-            </div>
-
             {/* List of Semester Cards */}
-            <div className={
-              currentLayout === 'kanban' 
-                ? "flex flex-row gap-4 sm:gap-6 overflow-x-auto pt-8 pb-5 px-1 sm:px-3 items-end snap-x max-w-full min-w-0 custom-scrollbar scale-y-[-1]" 
-                : "space-y-6"
-            }>
-              {simulatedSemesters.map((sem, semIdx) => {
+            <div 
+              ref={boardContainerRef}
+              onScroll={handleBoardScroll}
+              className={
+                currentLayout === 'kanban' 
+                  ? "flex flex-row gap-5 overflow-x-auto pt-2 pb-6 px-1 sm:px-2 items-start snap-x max-w-full min-w-0 no-scrollbar" 
+                  : "space-y-6"
+              }
+            >
+              {displayedSemesters.map(({ sem, originalIdx: semIdx }) => {
                 const stats = semesterStats.find(s => s.id === sem.id);
+                const visibleCourses = sem.courses.filter(c => c.code !== "CSE400");
                 const hasCSE400 = sem.courses.some(c => c.code === "CSE400");
                 const isSemester9Plus = semIdx >= 8; // index 8 is the 9th semester card
                 const intake = semesterIntakes[semIdx];
-                const isAllCompleted = sem.courses.length > 0 && sem.courses.every(c => c.isCompleted);
+                const isAllCompleted = visibleCourses.length > 0 && visibleCourses.every(c => c.isCompleted);
 
                 return (
                   <div 
@@ -4284,9 +5202,9 @@ export default function Home() {
                     onDragLeave={() => setDragOverSemesterId(null)}
                     className={`${
                       currentLayout === 'kanban' 
-                        ? `w-[84vw] sm:w-[340px] min-w-[280px] max-w-[340px] flex-shrink-0 snap-start flex flex-col scale-y-[-1] self-end` 
-                        : ""
-                    } border rounded-3xl overflow-visible shadow-xl backdrop-blur-md hover:border-white/[0.12] transition-all duration-300 relative ${
+                        ? "w-[84vw] sm:w-[340px] min-w-[280px] max-w-[340px] flex-shrink-0 snap-start flex flex-col" 
+                        : "w-full flex flex-col"
+                    } border rounded-3xl overflow-visible shadow-xl backdrop-blur-md hover:border-white/[0.12] transition-colors duration-200 relative ${
                       draggingCourseCode && dragOverSemesterId === sem.id 
                         ? "border-dashed border-2 border-indigo-500 bg-indigo-500/10 shadow-[0_0_30px_rgba(99,102,241,0.2)]" 
                         : sem.isRS 
@@ -4298,7 +5216,7 @@ export default function Home() {
                     {/* Semester Card Header */}
                     {sem.isCollapsed ? (
                       /* Collapsed Compact State */
-                      <div className="bg-white/[0.02] p-3.5 rounded-3xl flex items-center justify-between gap-2.5 transition-all">
+                      <div className="bg-white/[0.02] p-3.5 rounded-3xl flex items-center justify-between gap-2.5 transition-colors duration-150">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <button
                             onClick={() => handleToggleSemesterAllCompleted(sem.id)}
@@ -4336,7 +5254,7 @@ export default function Home() {
                                 </>
                               )}
                               <span className="text-slate-600">•</span>
-                              <span>{sem.courses.length} course{sem.courses.length !== 1 ? 's' : ''}</span>
+                              <span>{visibleCourses.length} course{visibleCourses.length !== 1 ? 's' : ''}</span>
                             </div>
                           </div>
                         </div>
@@ -4346,15 +5264,9 @@ export default function Home() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const updated = semesters.map(s => {
-                                if (s.id === sem.id) {
-                                  return { ...s, isCollapsed: false };
-                                }
-                                return s;
-                              });
-                              updateSemesters(updated);
+                              handleToggleSemesterCollapse(sem.id);
                             }}
-                            className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition cursor-pointer"
+                            className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer active:scale-95"
                             title="Expand Semester"
                           >
                             <ChevronDown className="h-3.5 w-3.5" />
@@ -4362,7 +5274,7 @@ export default function Home() {
 
                           <button
                             onClick={() => handleDeleteSemester(sem.id)}
-                            className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer"
+                            className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer active:scale-95"
                             title="Delete Semester"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -4371,7 +5283,7 @@ export default function Home() {
                       </div>
                     ) : (
                       /* Expanded State Header */
-                      <div className="bg-white/[0.02] p-4 rounded-t-3xl border-b border-white/[0.06] space-y-3 transition-all">
+                      <div className="bg-white/[0.02] p-4 rounded-t-3xl border-b border-white/[0.06] space-y-3 transition-colors duration-150">
                         {/* Row 1: Checkbox + Title on left; Minimize + Trash on right */}
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -4398,15 +5310,9 @@ export default function Home() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const updated = semesters.map(s => {
-                                  if (s.id === sem.id) {
-                                    return { ...s, isCollapsed: true };
-                                  }
-                                  return s;
-                                });
-                                updateSemesters(updated);
+                                handleToggleSemesterCollapse(sem.id);
                               }}
-                              className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition cursor-pointer"
+                              className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer active:scale-95"
                               title="Minimize Semester"
                             >
                               <ChevronUp className="h-3.5 w-3.5" />
@@ -4414,7 +5320,7 @@ export default function Home() {
 
                             <button
                               onClick={() => handleDeleteSemester(sem.id)}
-                              className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer"
+                              className="w-7 h-7 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-colors cursor-pointer active:scale-95"
                               title="Delete Semester"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -4491,9 +5397,9 @@ export default function Home() {
 
                     {/* Course list grid in Semester Card */}
                     {!sem.isCollapsed && (
-                      <div className={`p-4 flex-grow ${currentLayout === 'kanban' ? 'space-y-0' : 'space-y-2.5'}`}>
+                      <div className={`p-4 flex-grow ${currentLayout === 'kanban' ? 'space-y-0' : 'space-y-2.5'} animate-in fade-in duration-150`}>
                       
-                      {sem.courses.length === 0 && (
+                      {visibleCourses.length === 0 && (
                         <div className="py-8 text-center text-slate-400 text-xs italic">
                           No courses scheduled in this semester.
                         </div>
@@ -4692,18 +5598,111 @@ export default function Home() {
                   </div>
                 );
               })}
+
+              {/* Kanban: Add Semester Column Card */}
+              {currentLayout === 'kanban' && (
+                <div className="w-[84vw] sm:w-[320px] min-w-[260px] max-w-[320px] flex-shrink-0 snap-start flex flex-col justify-center">
+                  <button
+                    type="button"
+                    onClick={handleTriggerAddSemester}
+                    className="h-full min-h-[320px] rounded-3xl border-2 border-dashed border-blue-500/25 hover:border-blue-400/60 bg-[#070712]/60 hover:bg-blue-500/[0.06] p-6 flex flex-col items-center justify-center gap-3 text-slate-400 hover:text-white transition-all cursor-pointer group active:scale-[0.99] shadow-lg"
+                    title="Add Next Semester"
+                  >
+                    <div className="h-12 w-12 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-110 group-hover:bg-blue-500/25 transition-all shadow-[0_0_20px_rgba(59,130,246,0.25)]">
+                      <Plus className="h-6 w-6 stroke-[2.5]" />
+                    </div>
+                    <div className="text-center">
+                      <div className="font-extrabold text-sm text-white group-hover:text-blue-300 transition-colors">
+                        Add {getOrdinal(semesters.length + 1)} Semester
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1 font-mono">
+                        {nextPredictedIntake.term} {nextPredictedIntake.year}
+                      </div>
+                      <span className="inline-block mt-3 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-600/30">
+                        + Add Courses
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Standalone Capstone & Graduation Module */}
+            {/* List View: Bottom Add Semester Full Card */}
+            {currentLayout === 'list' && (
+              <button
+                type="button"
+                onClick={handleTriggerAddSemester}
+                className="w-full py-5 px-6 rounded-3xl border-2 border-dashed border-blue-500/25 hover:border-blue-400/60 bg-[#070712]/60 hover:bg-blue-500/[0.06] text-slate-300 hover:text-white transition-all flex flex-col sm:flex-row items-center justify-center gap-3 cursor-pointer group shadow-lg active:scale-[0.99]"
+                title="Add Next Semester"
+              >
+                <div className="h-10 w-10 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-110 group-hover:bg-blue-500/25 transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)] shrink-0">
+                  <Plus className="h-5 w-5 stroke-[2.5]" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <span className="text-sm font-extrabold text-white group-hover:text-blue-300 transition-colors">
+                    Add {getOrdinal(semesters.length + 1)} Semester
+                  </span>
+                  <span className="block text-xs text-slate-400 font-medium mt-0.5">
+                    {nextPredictedIntake.term} {nextPredictedIntake.year} • Click to create term &amp; enroll courses
+                  </span>
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* CSE400 Capstone & Thesis Track (Full-Width) */}
+          <div id="capstone-section" className="w-full">
             <CSE400 
               isCollapsed={isCapstoneCollapsed} 
               onToggle={() => setIsCapstoneCollapsed(prev => !prev)} 
             />
-          </main>
-
           </div>
+      </div>
+
+      {/* Connect with me Footer at very bottom of dashboard */}
+      <footer className="w-full mt-auto pt-8 pb-28 lg:pb-12 border-t border-white/[0.08] flex flex-col items-center justify-center gap-4 text-center">
+        {/* Connect with me social links */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs font-bold text-slate-400">
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold leading-none">Connect with me:</span>
+          <a
+            href="https://github.com/fakekhanabdullah"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#060814] border border-blue-500/20 hover:border-blue-400/50 hover:text-blue-300 transition leading-none text-slate-300"
+          >
+            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-blue-300 shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            <span className="leading-none">GitHub</span>
+          </a>
+          <span className="text-zinc-700 self-center">|</span>
+          <a
+            href="https://www.linkedin.com/in/khan-abdullahh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#060814] border border-blue-500/20 hover:border-blue-400/50 hover:text-blue-300 transition leading-none text-slate-300"
+          >
+            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-blue-300 shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
+            <span className="leading-none">LinkedIn</span>
+          </a>
         </div>
-      )}
+
+        {/* Legal Links for Google OAuth & Compliance */}
+        <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
+          <a href="/privacy" className="hover:text-blue-300 underline transition">
+            Privacy Policy
+          </a>
+          <span>•</span>
+          <a href="/terms" className="hover:text-blue-300 underline transition">
+            Terms of Service
+          </a>
+        </div>
+
+        {/* Muted Copyright Disclaimer */}
+        <div className="text-[11px] text-slate-400 leading-relaxed font-medium">
+          <p>© 2026 Flow136. Made with care by <strong className="text-slate-200">Khan Abdullah</strong></p>
+        </div>
+      </footer>
+    </main>
+  )}
 
       {/* 4. Search and Add Course Combobox Overlay */}
       {activeCourseSelectorSemesterId !== null && (
@@ -5087,37 +6086,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Proper Stationary Footer Section */}
-      <footer className="mt-auto pt-8 pb-6 border-t border-slate-800/80 bg-[#030304] flex flex-col items-center justify-center gap-4 text-center">
-        {/* Connect with me social links */}
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs font-bold text-slate-400">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold leading-none">Connect with me:</span>
-          <a
-            href="https://github.com/fakekhanabdullah"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#08080d] border border-slate-800 hover:border-indigo-500/50 hover:text-indigo-400 transition leading-none text-slate-300"
-          >
-            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400 shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
-            <span className="leading-none">GitHub</span>
-          </a>
-          <span className="text-zinc-700 self-center">|</span>
-          <a
-            href="https://www.linkedin.com/in/khan-abdullahh"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#08080d] border border-slate-800 hover:border-indigo-500/50 hover:text-indigo-400 transition leading-none text-slate-300"
-          >
-            <svg className="h-3.5 w-3.5 fill-current text-slate-400 hover:text-indigo-400 shrink-0" viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
-            <span className="leading-none">LinkedIn</span>
-          </a>
-        </div>
-
-        {/* Muted Copyright Disclaimer */}
-        <div className="text-[11px] text-slate-400 leading-relaxed font-medium">
-          <p>© 2026 Flow136. Made with care by <strong className="text-slate-200">Khan Abdullah</strong></p>
-        </div>
-      </footer>
 
       {/* 5. Grade Sheet Preview Modal */}
       {showGradeSheetModal && isMounted && (
@@ -5633,15 +6601,29 @@ export default function Home() {
                     </p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => {
-                    setShowRoadmapModal(false);
-                    setRoadmapSearch("");
-                  }}
-                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer shrink-0"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                  <a
+                    href="https://docs.google.com/document/d/1_gvpl646PurM3Cl_JoxaXt0mvQx_6-Qc"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border border-indigo-500/30 hover:border-indigo-400/50 rounded-xl text-[11px] sm:text-xs font-bold transition shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer whitespace-nowrap"
+                    title="Open Sample OBE Curriculum (Version 2023)"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-blue-100" />
+                    <span>Sample OBE Curriculum (Version 2023)</span>
+                    <ExternalLink className="h-3 w-3 text-blue-100 opacity-80" />
+                  </a>
+                  <button 
+                    onClick={() => {
+                      setShowRoadmapModal(false);
+                      setRoadmapSearch("");
+                    }}
+                    className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Segmented Filter Pills & Search Bar Strip */}
@@ -6088,28 +7070,53 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* GenEd Guidelines Link Banner */}
-                <div className="bg-[#0e0e14]/60 border border-white/[0.08] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 mt-2 text-center sm:text-left">
-                  <div className="flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
-                    <div>
-                      <p className="text-xs text-slate-100 font-bold">
-                        Need official clarification on GenEd stream rules?
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Check prerequisites and eligible courses directly on the university website.
-                      </p>
+                {/* External Official Resources Banners */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                  <div className="bg-[#0e0e14]/60 border border-white/[0.08] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                    <div className="flex items-center gap-3">
+                      <span className="h-2.5 w-2.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
+                      <div>
+                        <p className="text-xs text-slate-100 font-bold">
+                          Sample OBE Curriculum (Version 2023)
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          View the official degree pathway, course distributions &amp; structure.
+                        </p>
+                      </div>
                     </div>
+                    <a
+                      href="https://docs.google.com/document/d/1_gvpl646PurM3Cl_JoxaXt0mvQx_6-Qc"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer shrink-0 whitespace-nowrap"
+                    >
+                      <span>Sample OBE Curriculum (Version 2023)</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
                   </div>
-                  <a
-                    href="https://www.bracu.ac.bd/avilable-program/general-education-gened"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer shrink-0"
-                  >
-                    <span>Official GenEd Guidelines</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </a>
+
+                  <div className="bg-[#0e0e14]/60 border border-white/[0.08] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+                    <div className="flex items-center gap-3">
+                      <span className="h-2.5 w-2.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />
+                      <div>
+                        <p className="text-xs text-slate-100 font-bold">
+                          Need clarification on GenEd stream rules?
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Check prerequisites and eligible courses directly on university website.
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href="https://www.bracu.ac.bd/avilable-program/general-education-gened"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 hover:text-white text-xs font-bold rounded-xl transition active:scale-95 cursor-pointer shrink-0 whitespace-nowrap"
+                    >
+                      <span>Official GenEd Guidelines</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
                 </div>
 
               </div>
@@ -6559,7 +7566,431 @@ export default function Home() {
           </div>
         </div>
       )}
-      {renderTutorial()}
+
+      {/* Cloud Sync & Auth Gatekeeper Modal */}
+      {showCloudModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150">
+          <div className="bg-[#08080d]/98 border border-white/[0.1] rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh] relative backdrop-blur-xl">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-white/[0.08] flex items-center justify-between bg-[#0e0e14]/50">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)] shrink-0">
+                  <Cloud className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+                    <span>Google Drive Cloud Sync</span>
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCloudModal(false);
+                  setGatekeeperError(null);
+                }}
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
+              {/* Gatekeeper Error Denial Alert */}
+              {gatekeeperError && (
+                <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 space-y-1.5 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
+                    <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" />
+                    <span>Access Blocked by Gatekeeper</span>
+                  </div>
+                  <p className="text-[11px] text-rose-200/90 leading-relaxed font-medium">
+                    {gatekeeperError}
+                  </p>
+                </div>
+              )}
+
+              {!cloudUser ? (
+                /* Unauthenticated View */
+                <div className="space-y-4 py-2">
+                  {/* Primary Google Sign In Button */}
+                  <button
+                    type="button"
+                    disabled={isAuthenticating}
+                    onClick={() => handleCloudSignIn()}
+                    className="w-full py-3.5 px-4 bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-3 transition-all shadow-lg active:scale-[0.99] cursor-pointer disabled:opacity-60"
+                  >
+                    {isAuthenticating ? (
+                      <RefreshCw className="h-4 w-4 animate-spin text-slate-700" />
+                    ) : (
+                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                      </svg>
+                    )}
+                    <span>{isAuthenticating ? "Connecting with Google..." : "Sign in (G-Suite)"}</span>
+                  </button>
+
+                  {/* Google OAuth Compliance Legal Notice */}
+                  <div className="text-center pt-1 px-2">
+                    <p className="text-[11px] text-slate-400 leading-relaxed font-normal">
+                      By continuing with Google, you agree to Flow136&apos;s{" "}
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 underline font-semibold transition"
+                      >
+                        Terms of Service
+                      </a>{" "}
+                      and{" "}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 underline font-semibold transition"
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1.5">
+                      Cloud backup writes strictly to your hidden Google Drive AppData folder. We never read or access your personal files.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Authenticated View */
+                <div className="space-y-4">
+                  {/* Student Profile Card */}
+                  <div className="p-4 rounded-2xl bg-[#08080f] border border-white/[0.08] flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 border border-indigo-400/30 flex items-center justify-center text-white font-black text-sm shadow-md shrink-0 overflow-hidden">
+                        {cloudUser.picture ? (
+                          <img src={cloudUser.picture} alt={cloudUser.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <span>{cloudUser.name.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-black text-white truncate">{cloudUser.name}</h4>
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                            <ShieldCheck className="h-3 w-3" />
+                            Verified BRACU Student
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">{cloudUser.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCloudSignOut}
+                      className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 border border-white/[0.08] hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-[11px] font-bold transition cursor-pointer shrink-0"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+
+                  {/* Sync Details & Status Card */}
+                  <div className="p-4 rounded-2xl bg-[#06060a] border border-white/[0.06] space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium">Drive Sync Status</span>
+                      <span className="flex items-center gap-1.5 font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 rounded-lg text-[11px]">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                        </span>
+                        <span>{cloudSyncStatus === 'syncing' ? 'Syncing Now...' : 'Connected & Synced'}</span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs border-t border-white/[0.04] pt-2.5">
+                      <span className="text-slate-400 font-medium">Last Cloud Backup</span>
+                      <span className="text-slate-200 font-mono font-bold text-[11px]">
+                        {formatSyncTimestamp(cloudLastSync)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs border-t border-white/[0.04] pt-2.5">
+                      <span className="text-slate-400 font-medium">Active Degree Plan</span>
+                      <span className="text-indigo-300 font-bold text-[11px]">
+                        {cumulativeStats?.completedCredits ?? 0} / 136 Cr Completed
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Auto-Sync Toggle */}
+                  <div className="p-3.5 rounded-2xl bg-[#08080f] border border-white/[0.08] flex items-center justify-between gap-3">
+                    <div>
+                      <h5 className="text-xs font-bold text-white">Automated Auto-Save</h5>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Automatically sync changes to Google Drive in the background</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isAutoSyncEnabled;
+                        setIsAutoSyncEnabled(next);
+                        localStorage.setItem(STORAGE_KEYS.AUTO_SYNC, String(next));
+                      }}
+                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                        isAutoSyncEnabled ? 'bg-indigo-600' : 'bg-white/10'
+                      }`}
+                    >
+                      <div className={`h-4 w-4 rounded-full bg-white transition-transform absolute top-1 ${
+                        isAutoSyncEnabled ? 'left-6' : 'left-1'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {/* Sync Action Buttons */}
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      type="button"
+                      disabled={cloudSyncStatus === 'syncing'}
+                      onClick={() => performCloudSync()}
+                      className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-2xl shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${cloudSyncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                      <span>{cloudSyncStatus === 'syncing' ? "Syncing..." : "Sync Now"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const isDemo = localStorage.getItem(STORAGE_KEYS.DEMO_MODE) === 'true';
+                          let backupPayload: DriveBackupPayload | null = null;
+                          if (isDemo) {
+                            backupPayload = loadDemoDriveBackup();
+                          } else {
+                            const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+                            if (!token) throw new Error("Please re-authenticate with Google.");
+                            const file = await findDriveBackupFile(token);
+                            if (file) {
+                              backupPayload = await loadDriveBackup(token, file.id);
+                            }
+                          }
+                          if (backupPayload) {
+                            handleRestoreFromCloud(backupPayload);
+                          } else {
+                            showCloudToast("No cloud backup found on Google Drive.");
+                          }
+                        } catch (err: any) {
+                          showCloudToast(err?.message || "Failed to restore from Google Drive.");
+                        }
+                      }}
+                      className="flex-1 py-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-200 hover:text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <Download className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Restore from Drive</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-white/[0.08] bg-[#0e0e14]/50 flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-[11px] text-slate-400">
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-blue-300 underline transition"
+                >
+                  Privacy Policy
+                </a>
+                <span>•</span>
+                <a
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-blue-300 underline transition"
+                >
+                  Terms of Service
+                </a>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCloudModal(false);
+                  setGatekeeperError(null);
+                }}
+                className="px-5 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-xl text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud Remote Conflict / Initial Found Modal */}
+      {showCloudConflictModal && cloudConflictPayload && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-[#08080d]/98 border border-white/[0.12] rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-4 relative">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                <Cloud className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-base font-black text-white">Cloud Curriculum Found</h4>
+                <p className="text-xs text-slate-400 mt-0.5">Existing backup on Google Drive</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-[#0c0c14] border border-white/[0.06] text-xs space-y-2 text-slate-300">
+              <p>
+                An existing Flow136 curriculum backup was found on your Google Drive:
+              </p>
+              <div className="text-[11px] font-mono text-indigo-300 bg-indigo-500/10 p-2.5 rounded-xl space-y-1">
+                <div>Backup Date: <strong>{formatSyncTimestamp(cloudConflictPayload.updatedAt)}</strong></div>
+                <div>Semesters: <strong>{cloudConflictPayload.semesters?.length ?? 0} semesters planned</strong></div>
+                {cloudConflictPayload.statsSummary && (
+                  <div>Credits: <strong>{cloudConflictPayload.statsSummary.completedCredits} completed</strong></div>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Would you like to restore this cloud plan, or overwrite it with your current local plan?
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCloudConflictModal(false);
+                  performCloudSync();
+                }}
+                className="flex-1 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 text-xs font-bold rounded-2xl transition cursor-pointer"
+              >
+                Keep Local Plan
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRestoreFromCloud()}
+                className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-2xl shadow-md shadow-blue-600/25 transition cursor-pointer"
+              >
+                Restore Cloud Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Cloud Toast Notification */}
+      {cloudToastMessage && (
+        <div className="fixed bottom-24 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-200 pointer-events-none">
+          <div className="bg-[#071710]/95 border border-emerald-500/35 text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl flex items-center gap-2.5">
+            <Cloud className="h-4 w-4 text-emerald-400 shrink-0 animate-pulse" />
+            <span>{cloudToastMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop SpeedDial Floating (+) Action Button (bottom right) */}
+      {isOnboarded && (
+        <SpeedDialMenu
+          onAddSemester={handleTriggerAddSemester}
+          onAddCourses={() => setIsAddCoursesModalOpen(true)}
+          onQuickGrades={() => {
+            setQuickGradesInitialSemIdx(0);
+            setIsQuickGradesModalOpen(true);
+          }}
+          isCgpaMode={mode === 'gpa'}
+        />
+      )}
+
+      {/* Mobile Floating Action Sheet (when (+) tapped on mobile nav) */}
+      {isOnboarded && (
+        <SpeedDialMenu
+          onAddSemester={handleTriggerAddSemester}
+          onAddCourses={() => {
+            setAddCoursesPreselected([]);
+            setIsAddCoursesModalOpen(true);
+          }}
+          onQuickGrades={() => {
+            setQuickGradesInitialSemIdx(0);
+            setIsQuickGradesModalOpen(true);
+          }}
+          isCgpaMode={mode === 'gpa'}
+          isMobileSheet={true}
+          isOpenControlled={isMobileSpeedDialOpen}
+          onCloseControlled={() => setIsMobileSpeedDialOpen(false)}
+        />
+      )}
+
+      {/* Mobile Bottom Navigation Bar (matches desktop sidebar dock with + Add in middle) */}
+      {isOnboarded && (
+        <MobileBottomNav
+          activeTab={mobileActiveTab}
+          onTabChange={(tab) => {
+            setMobileActiveTab(tab);
+            if (tab === "planner" || tab === "semesters") {
+              const el = document.getElementById("semester-planner-section");
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            } else if (tab === "cgpa") {
+              setMode("gpa");
+              const el = document.getElementById("gpa-dashboard-section");
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            } else if (tab === "categories" || tab === "curriculum") {
+              const el = document.getElementById("category-requirements-section");
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            } else if (tab === "tools") {
+              setIsExtraSidebarOpen(true);
+            } else if (tab === "profile") {
+              setShowCloudModal(true);
+            }
+          }}
+          onOpenAddCourses={() => {
+            setAddCoursesPreselected([]);
+            setIsAddCoursesModalOpen(true);
+          }}
+          onOpenTools={() => setIsExtraSidebarOpen(true)}
+          onOpenSpeedDial={() => setIsMobileSpeedDialOpen(true)}
+          isCgpaMode={mode === 'gpa'}
+        />
+      )}
+
+      {/* Add Semester Focused Card Popup Modal */}
+      <AddSemesterModal
+        isOpen={isAddSemesterModalOpen}
+        onClose={() => {
+          setIsAddSemesterModalOpen(false);
+          setFocusedSemesterForModal(null);
+        }}
+        semester={focusedSemesterForModal}
+        onAddCourseToSemester={(semId, courseCode) => handleAddCourseToSemester(semId, courseCode)}
+        onRemoveCourseFromSemester={(semId, courseCode) => handleRemoveCourse(semId, courseCode)}
+        allSemesters={semesters}
+      />
+
+      {/* Add & Assign Courses Multi-select Modal */}
+      <AddCoursesModal
+        isOpen={isAddCoursesModalOpen}
+        onClose={() => {
+          setIsAddCoursesModalOpen(false);
+          setAddCoursesPreselected([]);
+        }}
+        semesters={semesters}
+        initialSelectedCodes={addCoursesPreselected}
+        onCommitAddCourses={handleCommitAddCourses}
+        onRemoveCourseFromSemester={(semId, courseCode) => handleRemoveCourse(semId, courseCode)}
+        onClearSemesterCourses={handleClearSemesterCourses}
+      />
+
+      {/* Quick Grade Carousel Modal */}
+      <QuickGradeCarouselModal
+        isOpen={isQuickGradesModalOpen}
+        onClose={() => setIsQuickGradesModalOpen(false)}
+        semesters={semesters}
+        initialSemesterIdx={quickGradesInitialSemIdx}
+        onUpdateGrade={(semId, courseCode, grade) => handleGradeChange(semId, courseCode, grade)}
+      />
     </div>
   );
 }
